@@ -49,13 +49,23 @@ Pure git-based, all in the browser.
 
 1. **New → Blueprint**, point it at this repo. It reads
    [render.yaml](render.yaml).
-2. Approve the plan. The blueprint creates the service, attaches a 1 GB disk at
-   `/var/data`, and **generates `API_KEY` for you**.
+2. Approve it. The blueprint creates the service on the `0.5c-512mb` plan,
+   attaches a 1 GB disk at `/var/data`, and **generates `API_KEY` for you**.
 3. Copy that key from **Environment** in the dashboard — you need it once, to
    link your phone.
+4. Open `https://<your-service>.onrender.com/`, paste the key, scan the QR.
 
-`autoDeploy: true` means every push to `main` redeploys. The session survives
-because it lives on the disk, not in the image.
+`autoDeployTrigger: commit` means every push to `main` redeploys. The session
+survives because it lives on the disk, not in the image.
+
+**Why not the free plan.** Render will not attach a persistent disk to a free
+instance, and a free instance sleeps when idle, which drops the WhatsApp
+socket. Either one forces repeated re-pairing. The disk itself is $0.25/GB per
+month on top of compute.
+
+**If the instance restarts under memory pressure**, move `plan` up to `1c-2g`.
+512 MB is enough in normal operation, but an OOM loop reconnects to WhatsApp
+over and over, which is the thing worth paying to avoid.
 
 ## Option C — Any VPS with Docker
 

@@ -1,20 +1,26 @@
-# Render Blueprint. In the Render dashboard: New > Blueprint, point it at this
-# repo, and it reads this file.
+# Render Blueprint. In the dashboard: New > Blueprint, point it at this repo.
 #
-# The `starter` plan is deliberate, not an upsell: a persistent disk requires a
-# paid instance, and the free plan sleeps when idle. A sleeping instance drops
-# the WhatsApp socket and a disk-less instance forgets the session on every
-# deploy, so the free tier cannot run this correctly.
+# Note the paid compute plan. It is not an upsell: Render only attaches a
+# persistent disk to a paid instance, and a disk is mandatory here because the
+# auth folder IS the WhatsApp session. On a free instance the service also
+# sleeps when idle, which drops the WhatsApp socket. Either one forces you to
+# re-scan the QR repeatedly, and repeated re-linking is a ban risk.
 
 services:
   - type: web
     name: wa-http-api
     runtime: node
-    plan: starter
+    # Cheapest paid plan (0.5 CPU / 512 MB). If you see the instance restarting
+    # under memory pressure, move up to 1c-2g -- an OOM loop reconnects to
+    # WhatsApp over and over, which is exactly what you want to avoid.
+    plan: 0.5c-512mb
+    region: singapore
     branch: main
-    autoDeploy: true
-    # Exactly one. Two instances sharing one session get kicked off by WhatsApp
-    # as a duplicate device.
+    # Replaces the deprecated `autoDeploy: true`.
+    autoDeployTrigger: commit
+    # A disk cannot be shared, so Render pins this to one instance anyway --
+    # which is also what WhatsApp requires: a second instance sharing the
+    # session gets kicked off as a duplicate device.
     numInstances: 1
     buildCommand: npm ci --omit=dev
     startCommand: node index.js
@@ -28,13 +34,13 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "20"
-      # Session and token store both go on the disk, or a redeploy loses them.
+      # Both of these must sit on the disk, or a redeploy loses the session.
       - key: AUTH_DIR
         value: /var/data/auth
       - key: TOKEN_STORE
         value: /var/data/tokens.json
-      # Render generates this on first deploy; read it from the dashboard under
-      # Environment. You need it once, to link your phone from the console.
+      # Render generates this on the first deploy. Read it from the dashboard
+      # under Environment -- you need it once, to link your phone.
       - key: API_KEY
         generateValue: true
       - key: LOG_PRETTY
