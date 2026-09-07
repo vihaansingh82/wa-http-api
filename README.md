@@ -132,6 +132,7 @@ Every setting is an environment variable; see [.env.example](.env.example).
 | `SEND_TOKEN_TO_PHONE` | `true` | Also DM a new token to your own WhatsApp chat |
 | `PAIR_CLAIM_TTL_MS` | `600000` | How long a pairing attempt stays claimable |
 | `ALLOW_REMOTE_PAIRING` | `false` | Let non-loopback callers start a pairing |
+| `VERIFY_RECIPIENT` | `true` | Resolve each recipient via onWhatsApp before sending |
 | `SEND_DELAY_MS` | `3000` | Minimum gap between two outgoing sends |
 | `MAX_QUEUE_SIZE` | `500` | Queue depth before sends are rejected with 503 |
 | `WEBHOOK_URL` | *(empty)* | Where incoming messages are POSTed; empty disables forwarding |
@@ -382,9 +383,38 @@ curl -s -X POST -H "x-api-key: $KEY" $API/logout
 | `120363021234567890@g.us` | passed through unchanged |
 
 Rules: non-digits are stripped, a leading `00` international prefix is dropped,
-and the result must be 7–15 digits **including the country code** — a local
-number without one will reach the wrong person or nobody. Group JIDs (`@g.us`)
-are opaque and never rewritten. `@broadcast` and `status@broadcast` are rejected.
+and the result must be 7–15 digits. Group JIDs (`@g.us`) are opaque and never
+rewritten. `@broadcast` and `status@broadcast` are rejected.
+
+### Recipients are resolved, not guessed
+
+Before every send the recipient goes through `onWhatsApp`, and the JID it
+returns is the one actually used. This matters more than it sounds.
+
+Gluing `@s.whatsapp.net` onto whatever digits you typed produces a
+**syntactically valid JID that belongs to nobody** when the country code is
+missing. WhatsApp accepts that stanza and silently discards it — so the API
+answers `202 sent` and the message never arrives. That is the worst kind of
+failure, because nothing looks wrong at either end.
+
+So `8285861066` is resolved to `918285861066@s.whatsapp.net` (WhatsApp applies
+the linked account's own country), and the response says so:
+
+```json
+{
+  "sent": true,
+  "to": "918285861066@s.whatsapp.net",
+  "requested": "8285861066@s.whatsapp.net",
+  "resolved": true
+}
+```
+
+A number that genuinely is not on WhatsApp gets `404 recipient_not_found` with
+a message suggesting the country code, rather than a false success. Resolutions
+are cached, so repeat sends to the same recipient skip the lookup.
+
+Set `VERIFY_RECIPIENT=false` to skip it and send blind — only sensible if you
+already hold exact JIDs.
 
 ---
 
@@ -564,6 +594,7 @@ revoke, which is how the token-store write race was found.
 | `400 bad_request` | Malformed JSON, missing field, bad number or URL |
 | `401 unauthorized` | Missing or wrong `x-api-key` |
 | `404 not_found` | No such route |
+| `404 recipient_not_found` | Recipient not reachable on WhatsApp, often a missing country code |
 | `409 conflict` | `GET /qr` or `POST /pair/start` while already linked |
 | `502 upstream_error` | WhatsApp did not acknowledge the message |
 | `503 service_unavailable` | Not connected, no QR yet, or send queue full |

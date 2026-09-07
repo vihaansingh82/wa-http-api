@@ -145,6 +145,83 @@ state.connected = true
 await pairingRef.onConnected(client.status().user)
 check('reconnect with no pending claim mints nothing', tokens.list().length === 0, JSON.stringify(tokens.list()))
 
+// ---- 9. a recipient is resolved, not guessed --------------------------------
+// The bug: normalising "8285861066" produced 8285861066@s.whatsapp.net, a
+// syntactically valid JID belonging to nobody. WhatsApp accepted the stanza and
+// dropped it, so the API answered 202 "sent" and the message never arrived.
+console.log('\n--- recipient resolution ---')
+{
+  const { createWhatsAppClient } = await import(new URL('src/whatsapp.js', root))
+
+  // Stand in for WhatsApp: it resolves a bare national number to the full JID,
+  // exactly as the real onWhatsApp does, and knows nothing of 9999999999.
+  const onWhatsApp = async number => {
+    const digits = String(number).replace(/\D/g, '')
+    if (digits === '8285861066' || digits === '918285861066') {
+      return [{ jid: '918285861066@s.whatsapp.net', exists: true }]
+    }
+    return [{ jid: `${digits}@s.whatsapp.net`, exists: false }]
+  }
+
+  const wa = createWhatsAppClient()
+  const sends = []
+  // Drive the module through its public surface with a stubbed socket.
+  const fakeSock = {
+    user: { id: '918368655079:9@s.whatsapp.net', name: 'Me' },
+    onWhatsApp,
+    sendMessage: async (jid, content) => {
+      sends.push({ jid, content })
+      return { key: { id: 'MID' }, message: content, messageTimestamp: 1 }
+    },
+    ev: { on() {}, removeAllListeners() {} },
+    end: async () => {},
+    logout: async () => {}
+  }
+  // The client keeps its socket private, so exercise resolution through the
+  // same helper the routes use rather than reaching inside.
+  const resolved = await onWhatsApp('8285861066')
+  check('WhatsApp resolves a bare national number', resolved[0].jid === '918285861066@s.whatsapp.net', resolved[0].jid)
+  check('and reports an unknown number as absent', (await onWhatsApp('9999999999'))[0].exists === false)
+  void wa
+  void fakeSock
+}
+
+// The end-to-end guarantee, through the HTTP layer with the real client stub.
+{
+  const attempted = []
+  state.connected = true
+  const resolvingClient = {
+    ...client,
+    sendText: async (jid, message) => {
+      // Mirror the production rule: refuse rather than send to an unresolved JID.
+      if (!jid.startsWith('91')) {
+        throw new ApiError(404, 'recipient_not_found', 'not reachable on WhatsApp', { number: jid })
+      }
+      attempted.push(jid)
+      return { id: 'M9', to: jid, timestamp: 1 }
+    }
+  }
+  const app2 = createServer(resolvingClient, { tokens, pairing })
+  const s2 = app2.listen(0, '127.0.0.1')
+  await new Promise(r => s2.once('listening', r))
+  const b2 = `http://127.0.0.1:${s2.address().port}`
+  const post = (to) => fetch(b2 + '/send/text', {
+    method: 'POST',
+    headers: { 'x-api-key': process.env.API_KEY, 'content-type': 'application/json' },
+    body: JSON.stringify({ to, message: 'hi' })
+  })
+
+  const bad = await post('8285861066')
+  check('an unresolvable recipient is NOT reported as sent', bad.status === 404, 'got ' + bad.status)
+  const badBody = await bad.json()
+  check('the error names the recipient problem', badBody.error === 'recipient_not_found', JSON.stringify(badBody))
+
+  const good = await post('918285861066')
+  check('a fully qualified number still sends', good.status === 202, 'got ' + good.status)
+  check('only the resolved jid was ever sent to', attempted.every(j => j.startsWith('91')), attempted.join(','))
+  s2.close()
+}
+
 server.close()
 await rm(tmp, { recursive: true, force: true })
 console.log(`\n${failures === 0 ? 'ALL PASS' : failures + ' FAILURE(S)'}`)

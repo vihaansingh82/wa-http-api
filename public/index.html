@@ -265,8 +265,9 @@
 
         <div class="card">
           <h2>Send text</h2>
-          <label for="textTo">To <span class="hint">number in any format, or a group JID</span></label>
+          <label for="textTo">To <span class="hint">include the country code (91 for India), or a group JID</span></label>
           <input id="textTo" placeholder="+91 98765 43210" />
+          <p class="note" style="margin-top:6px">Recipients are checked against WhatsApp before sending, so a wrong number fails here instead of vanishing.</p>
           <label for="textBody">Message</label>
           <textarea id="textBody" placeholder="Hello from the API"></textarea>
           <div class="actions"><button id="sendText">Send</button></div>
@@ -275,7 +276,7 @@
 
         <div class="card">
           <h2>Send media</h2>
-          <label for="mediaTo">To</label>
+          <label for="mediaTo">To <span class="hint">include the country code</span></label>
           <input id="mediaTo" placeholder="+91 98765 43210" />
           <div class="row">
             <div style="flex: 0 0 130px">

@@ -16,9 +16,13 @@ import { ApiError } from './errors.js'
 import { createSendQueue } from './queue.js'
 import { createWebhookSender } from './webhook.js'
 import { buildWebhookPayload, shouldForward } from './messages.js'
+import { isGroupJid, jidToNumber } from './jid.js'
 
 /** How many recently sent messages to keep so Baileys can answer retry requests. */
 const SENT_CACHE_LIMIT = 200
+
+/** Resolved recipient JIDs, so a repeat send skips the lookup. */
+const RECIPIENT_CACHE_LIMIT = 500
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -44,6 +48,8 @@ export function createWhatsAppClient({ onConnected } = {}) {
   const msgRetryCounterCache = new NodeCache()
   /** @type {Map<string, import('baileys').proto.IMessage>} */
   const sentMessages = new Map()
+  /** @type {Map<string, string>} input JID -> the JID WhatsApp actually uses */
+  const recipientCache = new Map()
 
   let sock = null
   let connectionState = 'close'
@@ -278,9 +284,52 @@ export function createWhatsAppClient({ onConnected } = {}) {
     connectionState = 'close'
   }
 
-  /** Push a send through the global throttle, then remember it for retries. */
-  async function enqueueSend(jid, content, label) {
+  /**
+   * Turn a recipient into the JID WhatsApp actually uses, by asking WhatsApp.
+   *
+   * Appending @s.whatsapp.net to whatever digits the caller typed is not enough:
+   * a national number without its country code produces a syntactically valid
+   * JID that belongs to nobody. WhatsApp accepts the stanza and silently drops
+   * it, so the send reports success and the message never arrives. onWhatsApp
+   * resolves the number using the linked account's own country, and returns the
+   * real JID -- so we send where it says, or refuse.
+   */
+  async function resolveRecipient(jid) {
+    if (!config.verifyRecipient) return jid
+    // Groups and LIDs are already server-side identifiers; there is nothing to resolve.
+    if (isGroupJid(jid) || jid.endsWith('@lid')) return jid
+
+    const cached = recipientCache.get(jid)
+    if (cached) return cached
+
     const active = requireConnection()
+    const number = jidToNumber(jid)
+    const results = await active.onWhatsApp(number)
+    const match = results?.[0]
+
+    if (!match?.exists || !match.jid) {
+      throw new ApiError(
+        404,
+        'recipient_not_found',
+        `${number} is not reachable on WhatsApp. If you left off the country code, add it (91 for India, so 91${number}).`,
+        { number, checked: true }
+      )
+    }
+
+    recipientCache.set(jid, match.jid)
+    if (recipientCache.size > RECIPIENT_CACHE_LIMIT) {
+      recipientCache.delete(recipientCache.keys().next().value)
+    }
+    if (match.jid !== jid) {
+      logger.info({ from: jid, to: match.jid }, 'recipient resolved to a different jid')
+    }
+    return match.jid
+  }
+
+  /** Push a send through the global throttle, then remember it for retries. */
+  async function enqueueSend(input, content, label) {
+    const active = requireConnection()
+    const jid = await resolveRecipient(input)
     return queue.add(async () => {
       // Re-check: the connection may have dropped while this waited in the queue.
       if (!isConnected() || sock !== active) {
@@ -294,6 +343,9 @@ export function createWhatsAppClient({ onConnected } = {}) {
       return {
         id: sent.key?.id ?? null,
         to: jid,
+        // Surfaced when WhatsApp resolved the recipient to a different JID than
+        // the caller asked for -- usually a missing country code.
+        ...(jid === input ? {} : { requested: input, resolved: true }),
         timestamp: sent.messageTimestamp ? Number(sent.messageTimestamp) : null
       }
     }, label)

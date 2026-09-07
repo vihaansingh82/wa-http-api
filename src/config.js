@@ -54,6 +54,10 @@ export const config = {
   // Set false when this sits behind a proxy or tunnel that you do not control,
   // as a belt-and-braces measure on top of the forwarded-header detection.
   trustLoopbackPairing: bool('TRUST_LOOPBACK_PAIRING', true),
+  // Resolve every recipient through onWhatsApp before sending. Without this a
+  // number missing its country code produces a valid-looking JID that belongs
+  // to nobody: WhatsApp accepts the message and silently drops it.
+  verifyRecipient: bool('VERIFY_RECIPIENT', true),
   // Allow starting a pairing from a non-loopback address without the admin key.
   // Off by default: it would let anyone who can reach the port open a pairing.
   allowRemotePairing: bool('ALLOW_REMOTE_PAIRING', false),
