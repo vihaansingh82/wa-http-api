@@ -448,6 +448,30 @@ Consequences worth knowing:
 
 ---
 
+## Deploying
+
+See **[DEPLOY.md](DEPLOY.md)** for the full guide. The short version: this is a
+stateful, always-on service, so it needs a persistent disk for the session, a
+single instance, and no scale-to-zero. That rules out Vercel, Netlify, Workers
+and Lambda outright, and most free tiers.
+
+Two git-based paths are pre-configured:
+
+- **Fly.io** — [fly.toml](fly.toml) with a volume at `/data`, one always-on
+  machine, and a `/health` check. Push-to-deploy via
+  [.github/workflows/deploy.yml](.github/workflows/deploy.yml).
+- **Render** — [render.yaml](render.yaml) Blueprint: New > Blueprint, point it
+  at the repo. Attaches a 1 GB disk and generates `API_KEY` for you.
+
+Or run it on any VPS with [docker-compose.yml](docker-compose.yml).
+
+One deployment wrinkle worth knowing: pairing is credential-free only from
+loopback, so on a deployed instance you paste the admin key into the console
+once, then link by QR. [DEPLOY.md](DEPLOY.md#linking-your-phone-after-deploying)
+walks through it.
+
+---
+
 ## Docker
 
 ```bash

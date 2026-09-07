@@ -1,0 +1,61 @@
+name: Deploy
+
+# Deploys to Fly.io on every push to main. Requires a FLY_API_TOKEN repository
+# secret: create one with `fly tokens create deploy`, then add it under
+# Settings > Secrets and variables > Actions.
+#
+# The job is skipped when the secret is absent, so a fork or a fresh clone does
+# not fail CI for a deployment it was never set up for.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time. This service runs a single instance holding a single
+# WhatsApp session; overlapping deploys would fight over it.
+concurrency:
+  group: deploy-fly
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --omit=dev
+      - name: Check every source file parses
+        run: |
+          for f in index.js src/*.js; do node --check "$f"; done
+          echo "all files parse"
+
+  deploy:
+    name: Fly.io
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Is a Fly token configured?
+        id: gate
+        run: |
+          if [ -n "${{ secrets.FLY_API_TOKEN }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::FLY_API_TOKEN is not set, skipping deploy. See DEPLOY.md."
+          fi
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        if: steps.gate.outputs.ready == 'true'
+
+      - name: Deploy
+        if: steps.gate.outputs.ready == 'true'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --remote-only

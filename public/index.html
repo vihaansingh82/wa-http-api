@@ -195,7 +195,7 @@
 
       <pre class="out" id="pairOut"></pre>
 
-      <details>
+      <details id="manualDetails">
         <summary>I already have a token or key</summary>
         <div class="row" style="margin-top: 6px">
           <input id="manualToken" type="password" placeholder="wa_… or your admin API key" autocomplete="off" style="flex: 3 1 260px" />
@@ -799,6 +799,7 @@ function adopt(fresh, user, alreadyCollected) {
       : 'Linked, but no token came back.', false)
   }
   token = fresh
+  authed = true
   const stored = write(fresh)
   $('tokenUser').textContent = user ? (user.name ? user.name + ' — ' + user.id : user.id) : 'your account'
   $('tokenValue').textContent = fresh
@@ -825,7 +826,12 @@ $('useManual').onclick = async e => {
   busy(e.target, false)
   if (!ok) { token = previous; return show('pairOut', body, false) }
   write(value)
-  screenTo('main'); tabTo('console'); refreshStatus()
+  authed = true
+  await refreshHealth()
+  // Signed in but nothing linked yet? Stay here so the QR can be scanned.
+  route()
+  if (!$('main').hidden) refreshStatus()
+  else { updateLinkScreen(); show('pairOut', { signedIn: true, message: 'Credential accepted. Now link your phone.' }, true) }
 }
 
 // --- console ----------------------------------------------------------------
@@ -856,6 +862,7 @@ async function refreshStatus() {
 function signOut() {
   token = ''
   write('')
+  authed = false
   updateLinkScreen()
   screenTo('linkScreen')
 }
@@ -903,43 +910,80 @@ $('logout').onclick = async e => {
 $('refreshStatus').onclick = () => refreshStatus()
 
 // --- boot -------------------------------------------------------------------
-/** The link screen says different things depending on whether a phone is on. */
+/** Are we talking to the server over loopback? Decides whether pairing is open. */
+const isLocalHost = ['localhost', '127.0.0.1', '::1', ''].includes(location.hostname)
+
+let authed = false
+
+/**
+ * The link screen has three jobs depending on the situation: scan a QR, mint a
+ * token for a browser when a phone is already on, or -- on a remote deployment
+ * where pairing is not open -- ask for the admin key first.
+ */
 function updateLinkScreen() {
-  if (connected) {
+  const needsKeyFirst = !isLocalHost && !authed
+
+  if (needsKeyFirst) {
+    $('linkTitle').textContent = 'Enter your admin key'
+    $('linkBlurb').textContent =
+      'Pairing is only open without a credential from the server itself. This page is remote, so paste the API_KEY from your deployment below, then link your phone.'
+    $('startPair').hidden = true
+    $('linkSteps').hidden = true
+    $('manualDetails').open = true
+  } else if (connected) {
     $('linkTitle').textContent = 'Get your API token'
-    $('linkBlurb').textContent = 'A phone is already linked to this server, so there is nothing to scan. Mint a token for this browser instead.'
+    $('linkBlurb').textContent =
+      'A phone is already linked to this server, so there is nothing to scan. Mint a token for this browser instead.'
     $('startPair').textContent = 'Get my API token'
+    $('startPair').hidden = false
     $('linkSteps').hidden = true
   } else {
     $('linkTitle').textContent = 'Link your WhatsApp'
-    $('linkBlurb').textContent = 'Scan the code with your phone, exactly like WhatsApp Web. Your API token is created automatically once it connects — nothing to copy by hand.'
+    $('linkBlurb').textContent =
+      'Scan the code with your phone, exactly like WhatsApp Web. Your API token is created automatically once it connects — nothing to copy by hand.'
     $('startPair').textContent = 'Link WhatsApp'
+    $('startPair').hidden = false
     $('linkSteps').hidden = false
+  }
+}
+
+/** Verify the stored credential. Clears it if the server rejects it outright. */
+async function checkAuth() {
+  if (!token) return (authed = false)
+  const { ok, body } = await req('/status')
+  if (ok) return (authed = true)
+  if (body.error === 'unauthorized') {
+    token = ''
+    write('')
+  }
+  return (authed = false)
+}
+
+/** The console is only useful once we are BOTH signed in and actually linked. */
+function route() {
+  if (authed && connected) {
+    if ($('main').hidden) {
+      screenTo('main')
+      tabTo('console')
+    }
+  } else if ($('tokenScreen').hidden) {
+    updateLinkScreen()
+    screenTo('linkScreen')
   }
 }
 
 async function refreshAll() {
   await refreshHealth()
+  if (authed) await checkAuth()
+  route()
   if (!$('main').hidden && !$('paneConsole').hidden) await refreshStatus()
   if (!$('linkScreen').hidden) updateLinkScreen()
 }
 
 async function boot() {
   await refreshHealth()
-  updateLinkScreen()
-
-  if (!token) {
-    screenTo('linkScreen')
-  } else {
-    const { ok, body } = await req('/status')
-    if (!ok && body.error === 'unauthorized') {
-      signOut()
-    } else {
-      screenTo('main')
-      tabTo('console')
-      refreshStatus()
-    }
-  }
+  await checkAuth()
+  route()
   setInterval(refreshAll, 5000)
 }
 

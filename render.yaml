@@ -1,0 +1,48 @@
+# Render Blueprint. In the Render dashboard: New > Blueprint, point it at this
+# repo, and it reads this file.
+#
+# The `starter` plan is deliberate, not an upsell: a persistent disk requires a
+# paid instance, and the free plan sleeps when idle. A sleeping instance drops
+# the WhatsApp socket and a disk-less instance forgets the session on every
+# deploy, so the free tier cannot run this correctly.
+
+services:
+  - type: web
+    name: wa-http-api
+    runtime: node
+    plan: starter
+    branch: main
+    autoDeploy: true
+    # Exactly one. Two instances sharing one session get kicked off by WhatsApp
+    # as a duplicate device.
+    numInstances: 1
+    buildCommand: npm ci --omit=dev
+    startCommand: node index.js
+    healthCheckPath: /health
+
+    disk:
+      name: wa-data
+      mountPath: /var/data
+      sizeGB: 1
+
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # Session and token store both go on the disk, or a redeploy loses them.
+      - key: AUTH_DIR
+        value: /var/data/auth
+      - key: TOKEN_STORE
+        value: /var/data/tokens.json
+      # Render generates this on first deploy; read it from the dashboard under
+      # Environment. You need it once, to link your phone from the console.
+      - key: API_KEY
+        generateValue: true
+      - key: LOG_PRETTY
+        value: "false"
+      - key: SEND_DELAY_MS
+        value: "3000"
+      # Set these yourself if you want inbound messages forwarded.
+      - key: WEBHOOK_URL
+        sync: false
+      - key: WEBHOOK_SECRET
+        sync: false

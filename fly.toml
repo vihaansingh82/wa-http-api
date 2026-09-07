@@ -1,0 +1,50 @@
+# Fly.io deployment. Create the app and volume once, then `fly deploy` (or let
+# the GitHub Action do it on every push to main).
+#
+#   fly launch --no-deploy --copy-config --name <your-app-name>
+#   fly volumes create wa_data --size 1 --region <your-region>
+#   fly secrets set API_KEY=$(openssl rand -hex 32)
+#   fly deploy
+#
+# Change `app` to something unique before the first deploy.
+
+app = "wa-http-api"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "3000"
+  HOST = "0.0.0.0"
+  # Both of these must live on the mounted volume, or every restart forgets the
+  # WhatsApp session and you re-scan the QR.
+  AUTH_DIR = "/data/auth"
+  TOKEN_STORE = "/data/tokens.json"
+  LOG_PRETTY = "false"
+  SEND_DELAY_MS = "3000"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  # Never scale to zero and never run two of these. A suspended machine drops
+  # the WhatsApp socket; a second machine sharing one session gets kicked off by
+  # WhatsApp as a duplicate device.
+  auto_stop_machines = false
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "25s"
+    method = "GET"
+    path = "/health"
+
+[mounts]
+  source = "wa_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
