@@ -20,6 +20,8 @@
     --bad: #b3261e;
     --code-bg: #f2f3f5;
     --radius: 10px;
+    --get: #1a5fb4;
+    --post: #1f7a45;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -35,22 +37,24 @@
       --warn: #e0a145;
       --bad: #ef6b62;
       --code-bg: #11141a;
+      --get: #78aeff;
+      --post: #4ac97e;
     }
   }
 
   * { box-sizing: border-box; }
   body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
-  .wrap { max-width: 940px; margin: 0 auto; padding: 24px 18px 64px; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 22px 18px 72px; }
 
-  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; justify-content: space-between; margin-bottom: 20px; }
-  h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  h1 { font-size: 19px; margin: 0; letter-spacing: -0.01em; }
   h1 small { font-weight: 400; color: var(--muted); font-size: 13px; margin-left: 8px; }
-  h2 { font-size: 14px; margin: 0 0 14px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  h2 { font-size: 13px; margin: 0 0 14px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  h3 { font-size: 16px; margin: 28px 0 10px; }
+  h3:first-child { margin-top: 0; }
 
   .pill { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--panel); font-size: 13px; font-weight: 500; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
@@ -59,6 +63,14 @@
   .dot.bad { background: var(--bad); }
   .dot.live { animation: pulse 1.6s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: 0.35; } }
+
+  nav.tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  nav.tabs button {
+    background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted);
+    padding: 9px 14px; font-weight: 600; font-size: 14px; cursor: pointer; border-radius: 0;
+  }
+  nav.tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+  nav.tabs button:hover { color: var(--text); filter: none; }
 
   .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
@@ -86,16 +98,29 @@
   button.ghost { background: transparent; color: var(--text); border-color: var(--border); font-weight: 500; }
   button.danger { background: transparent; color: var(--bad); border-color: var(--bad); font-weight: 500; }
   button.big { padding: 13px 26px; font-size: 15px; }
+  button.mini { padding: 4px 10px; font-size: 12px; font-weight: 500; background: transparent; color: var(--muted); border-color: var(--border); }
   .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; align-items: center; }
 
   pre {
-    margin: 14px 0 0; padding: 12px; background: var(--code-bg); border: 1px solid var(--border);
-    border-radius: 8px; font: 12.5px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    overflow-x: auto; white-space: pre-wrap; word-break: break-word; max-height: 260px;
+    margin: 0; padding: 12px 13px; background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 8px; font: 12.5px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    overflow-x: auto; white-space: pre; max-height: 340px;
   }
-  pre:empty { display: none; }
+  pre.wrap-text { white-space: pre-wrap; word-break: break-word; }
+  pre.out { margin-top: 14px; white-space: pre-wrap; word-break: break-word; }
+  pre.out:empty { display: none; }
   pre.ok { border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); }
   pre.bad { border-color: color-mix(in srgb, var(--bad) 45%, var(--border)); }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.92em; }
+
+  .snip { position: relative; margin: 10px 0 0; }
+  .snip > button { position: absolute; top: 7px; right: 7px; opacity: 0; transition: opacity 0.12s; }
+  .snip:hover > button, .snip > button:focus { opacity: 1; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 10px 0 0; display: block; overflow-x: auto; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+  td code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
 
   .stat { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px dashed var(--border); font-size: 14px; }
   .stat:last-child { border-bottom: 0; }
@@ -107,31 +132,41 @@
   /* ---- linking screen ---- */
   .link-hero { text-align: center; padding: 26px 18px 30px; }
   .link-hero h3 { margin: 0 0 8px; font-size: 19px; }
-  .link-hero p { margin: 0 auto 20px; color: var(--muted); max-width: 44ch; font-size: 14px; }
+  .link-hero p { margin: 0 auto 20px; color: var(--muted); max-width: 46ch; font-size: 14px; }
   #qrHolder { min-height: 200px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; }
   #qrHolder img { width: 264px; max-width: 78vw; border-radius: 10px; background: #fff; padding: 12px; }
-  .steps { list-style: none; padding: 0; margin: 22px auto 0; max-width: 34ch; text-align: left; font-size: 13.5px; color: var(--muted); }
+  .steps { list-style: none; padding: 0; margin: 22px auto 0; max-width: 34ch; text-align: left; font-size: 13.5px; color: var(--muted); counter-reset: s; }
   .steps li { counter-increment: s; margin: 7px 0; padding-left: 26px; position: relative; }
   .steps li::before {
-    content: counter(s); position: absolute; left: 0; top: 1px;
+    content: counter(s); position: absolute; left: 0; top: 2px;
     width: 18px; height: 18px; border-radius: 50%; background: var(--panel-2);
     border: 1px solid var(--border); color: var(--text);
     font-size: 11px; font-weight: 600; display: grid; place-items: center;
   }
-  .steps { counter-reset: s; }
-  .spinner {
-    width: 26px; height: 26px; border-radius: 50%;
-    border: 2.5px solid var(--border); border-top-color: var(--accent);
-    animation: spin 0.8s linear infinite;
-  }
+  .spinner { width: 26px; height: 26px; border-radius: 50%; border: 2.5px solid var(--border); border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ---- token reveal ---- */
   .token-box { background: var(--panel-2); border: 1px solid var(--ok); border-radius: 8px; padding: 14px; margin-top: 8px; }
-  .token-box code { display: block; font-size: 13px; word-break: break-all; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .token-box code { display: block; font-size: 13px; word-break: break-all; }
   details { margin-top: 18px; font-size: 13px; }
   summary { cursor: pointer; color: var(--muted); }
   details[open] summary { margin-bottom: 10px; }
+
+  /* ---- docs ---- */
+  .ep { border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); margin: 12px 0; overflow: hidden; }
+  .ep > summary { padding: 13px 16px; display: flex; gap: 11px; align-items: center; flex-wrap: wrap; color: var(--text); margin: 0; }
+  .ep > summary::marker { color: var(--muted); }
+  .ep[open] > summary { border-bottom: 1px solid var(--border); }
+  .ep-body { padding: 4px 16px 18px; }
+  .verb { font: 600 11px/1 ui-monospace, Menlo, Consolas, monospace; padding: 4px 7px; border-radius: 4px; border: 1px solid currentColor; }
+  .verb.GET { color: var(--get); }
+  .verb.POST { color: var(--post); }
+  .ep-path { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13.5px; font-weight: 600; }
+  .ep-desc { color: var(--muted); font-size: 13px; flex: 1 1 100%; margin: 0; }
+  .badge { font-size: 11px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+  .docbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 4px; font-size: 13px; }
+  .docbar label { margin: 0; display: flex; gap: 7px; align-items: center; font-weight: 400; }
+  .docbar input[type="checkbox"] { width: auto; }
 </style>
 </head>
 <body>
@@ -151,22 +186,22 @@
         <button class="big" id="startPair">Link WhatsApp</button>
       </div>
 
-      <ol class="steps">
+      <ol class="steps" id="linkSteps">
         <li>Open WhatsApp on your phone</li>
         <li>Settings &rarr; <strong>Linked devices</strong></li>
         <li>Tap <strong>Link a device</strong></li>
         <li>Point it at the code above</li>
       </ol>
 
-      <pre id="pairOut"></pre>
+      <pre class="out" id="pairOut"></pre>
 
       <details>
-        <summary>I already have a token</summary>
+        <summary>I already have a token or key</summary>
         <div class="row" style="margin-top: 6px">
           <input id="manualToken" type="password" placeholder="wa_… or your admin API key" autocomplete="off" style="flex: 3 1 260px" />
           <button class="ghost" id="useManual" style="flex: 0 0 auto">Use it</button>
         </div>
-        <p class="note">Useful for the admin key from <code>.env</code>, or a token you saved elsewhere.</p>
+        <p class="note">Accepts the admin key from <code>.env</code>, or a token you saved elsewhere.</p>
       </details>
     </div>
   </section>
@@ -175,96 +210,207 @@
   <section id="tokenScreen" hidden>
     <div class="card">
       <h2>Linked</h2>
-      <p style="margin-top:0">Connected as <strong id="tokenUser"></strong>. This browser is signed in and the token below is saved here already.</p>
-      <div class="token-box">
-        <code id="tokenValue"></code>
-      </div>
+      <p style="margin-top:0">Connected as <strong id="tokenUser"></strong>. This browser is signed in and the token below is already saved here.</p>
+      <div class="token-box"><code id="tokenValue"></code></div>
       <div class="actions">
         <button id="copyToken">Copy token</button>
         <button class="ghost" id="gotoConsole">Open console</button>
+        <button class="ghost" id="gotoDocsFromToken">Read the API docs</button>
       </div>
       <p class="note" id="tokenDelivery"></p>
       <p class="note"><strong>This is the only time it is shown.</strong> It is stored hashed on the server, so it cannot be read back. Anyone holding it can send messages as you; <code>POST /logout</code> or <code>POST /tokens/revoke</code> kills it.</p>
     </div>
   </section>
 
-  <!-- ============================== CONSOLE ============================== -->
-  <section id="console" hidden>
-    <div class="grid">
-      <div class="card">
-        <h2>Status</h2>
-        <div id="statusBox"></div>
-        <div class="actions">
-          <button class="ghost" id="refreshStatus">Refresh</button>
-          <button class="danger" id="logout">Unlink phone</button>
-        </div>
-        <pre id="logoutOut"></pre>
-      </div>
+  <!-- ============================ MAIN (tabs) ============================ -->
+  <section id="main" hidden>
+    <nav class="tabs" role="tablist">
+      <button role="tab" id="tabConsole" aria-selected="true">Console</button>
+      <button role="tab" id="tabDocs" aria-selected="false">API docs</button>
+    </nav>
 
-      <div class="card">
-        <h2>Send text</h2>
-        <label for="textTo">To <span class="hint">number in any format, or a group JID</span></label>
-        <input id="textTo" placeholder="+91 98765 43210" />
-        <label for="textBody">Message</label>
-        <textarea id="textBody" placeholder="Hello from the API"></textarea>
-        <div class="actions"><button id="sendText">Send</button></div>
-        <pre id="textOut"></pre>
-      </div>
-
-      <div class="card">
-        <h2>Send media</h2>
-        <label for="mediaTo">To</label>
-        <input id="mediaTo" placeholder="+91 98765 43210" />
-        <div class="row">
-          <div style="flex: 0 0 130px">
-            <label for="mediaType">Type</label>
-            <select id="mediaType">
-              <option value="image">image</option>
-              <option value="video">video</option>
-              <option value="document">document</option>
-            </select>
+    <!-- ---------------------------- console ---------------------------- -->
+    <div id="paneConsole">
+      <div class="grid">
+        <div class="card">
+          <h2>Status</h2>
+          <div id="statusBox"></div>
+          <div class="actions">
+            <button class="ghost" id="refreshStatus">Refresh</button>
+            <button class="danger" id="logout">Unlink phone</button>
           </div>
-          <div style="flex: 2 1 200px">
-            <label for="mediaUrl">URL <span class="hint">http(s), reachable from the server</span></label>
-            <input id="mediaUrl" placeholder="https://example.com/photo.jpg" />
-          </div>
+          <pre class="out" id="logoutOut"></pre>
         </div>
-        <label for="mediaCaption">Caption <span class="hint">optional</span></label>
-        <input id="mediaCaption" placeholder="Site photo" />
-        <div class="actions"><button id="sendMedia">Send</button></div>
-        <pre id="mediaOut"></pre>
-      </div>
 
-      <div class="card">
-        <h2>Check a number</h2>
-        <label for="checkNum">Number <span class="hint">is it registered on WhatsApp?</span></label>
-        <input id="checkNum" placeholder="919876543210" />
-        <div class="actions"><button id="checkBtn">Check</button></div>
-        <pre id="checkOut"></pre>
+        <div class="card">
+          <h2>Send text</h2>
+          <label for="textTo">To <span class="hint">number in any format, or a group JID</span></label>
+          <input id="textTo" placeholder="+91 98765 43210" />
+          <label for="textBody">Message</label>
+          <textarea id="textBody" placeholder="Hello from the API"></textarea>
+          <div class="actions"><button id="sendText">Send</button></div>
+          <pre class="out" id="textOut"></pre>
+        </div>
+
+        <div class="card">
+          <h2>Send media</h2>
+          <label for="mediaTo">To</label>
+          <input id="mediaTo" placeholder="+91 98765 43210" />
+          <div class="row">
+            <div style="flex: 0 0 130px">
+              <label for="mediaType">Type</label>
+              <select id="mediaType">
+                <option value="image">image</option>
+                <option value="video">video</option>
+                <option value="document">document</option>
+              </select>
+            </div>
+            <div style="flex: 2 1 200px">
+              <label for="mediaUrl">URL <span class="hint">http(s), reachable from the server</span></label>
+              <input id="mediaUrl" placeholder="https://example.com/photo.jpg" />
+            </div>
+          </div>
+          <label for="mediaCaption">Caption <span class="hint">optional</span></label>
+          <input id="mediaCaption" placeholder="Site photo" />
+          <div class="actions"><button id="sendMedia">Send</button></div>
+          <pre class="out" id="mediaOut"></pre>
+        </div>
+
+        <div class="card">
+          <h2>Check a number</h2>
+          <label for="checkNum">Number <span class="hint">is it registered on WhatsApp?</span></label>
+          <input id="checkNum" placeholder="919876543210" />
+          <div class="actions"><button id="checkBtn">Check</button></div>
+          <pre class="out" id="checkOut"></pre>
+        </div>
       </div>
     </div>
-    <p class="note">Served by the API itself, so it talks to the same origin. Endpoint reference and curl examples are in the project README.</p>
+
+    <!-- ----------------------------- docs ------------------------------ -->
+    <div id="paneDocs" hidden>
+      <div class="docbar">
+        <span>Base URL <code id="docBase"></code></span>
+        <label><input type="checkbox" id="maskToken" /> Mask my token in the examples <span class="hint">(for screenshots)</span></label>
+      </div>
+
+      <div class="card span" style="margin-top:16px">
+        <h3>Authentication</h3>
+        <p style="margin-top:0">Send your credential on every request except <code>GET /health</code>, the console and the pairing routes. Either header works:</p>
+        <div class="snip" id="snipAuth"></div>
+        <table>
+          <thead><tr><th>Credential</th><th>Where it comes from</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><code>wa_…</code> device token</td><td>Minted when a phone completes pairing</td><td>Stored only as a SHA-256 hash. Revoked by <code>/logout</code> and <code>/tokens/revoke</code></td></tr>
+            <tr><td>Admin key</td><td><code>API_KEY</code> in <code>.env</code></td><td>Never expires, survives logout. Use it for scripts and cron</td></tr>
+          </tbody>
+        </table>
+        <p class="note">Pairing routes need no credential from <code>127.0.0.1</code>. From any other address they require the admin key, unless <code>ALLOW_REMOTE_PAIRING=true</code>.</p>
+      </div>
+
+      <h3>Endpoints</h3>
+      <div id="epList"></div>
+
+      <div class="card span">
+        <h3>Recipient formats</h3>
+        <p style="margin-top:0">The <code>to</code> field takes loose input and is normalised for you. Digits are stripped of punctuation, a leading <code>00</code> is dropped, and the result must be 7&ndash;15 digits <strong>including the country code</strong>.</p>
+        <table>
+          <thead><tr><th>You send</th><th>It becomes</th></tr></thead>
+          <tbody>
+            <tr><td><code>+91 98765 43210</code></td><td><code>919876543210@s.whatsapp.net</code></td></tr>
+            <tr><td><code>(91) 98765-43210</code></td><td><code>919876543210@s.whatsapp.net</code></td></tr>
+            <tr><td><code>0091 98765 43210</code></td><td><code>919876543210@s.whatsapp.net</code></td></tr>
+            <tr><td><code>919876543210@c.us</code></td><td><code>919876543210@s.whatsapp.net</code></td></tr>
+            <tr><td><code>120363021234567890@g.us</code></td><td>passed through unchanged (group)</td></tr>
+          </tbody>
+        </table>
+        <p class="note">A local number without a country code will reach the wrong person or nobody. <code>@broadcast</code> and <code>status@broadcast</code> are rejected.</p>
+      </div>
+
+      <div class="card span">
+        <h3>Incoming messages (webhook)</h3>
+        <p style="margin-top:0">Set <code>WEBHOOK_URL</code> and every inbound message is POSTed there as JSON. Your own messages (<code>key.fromMe</code>) and status broadcasts are skipped, and only <code>notify</code>-type events are forwarded &mdash; not history sync.</p>
+        <div class="snip" id="snipWebhook"></div>
+        <table>
+          <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>from</code></td><td>The chat. A group JID for groups, the sender for 1:1</td></tr>
+            <tr><td><code>participant</code></td><td>Who actually sent it. In a 1:1 chat this equals <code>from</code></td></tr>
+            <tr><td><code>isGroup</code></td><td><code>true</code> when <code>from</code> ends in <code>@g.us</code></td></tr>
+            <tr><td><code>type</code></td><td>Baileys message key: <code>conversation</code>, <code>extendedTextMessage</code>, <code>imageMessage</code>, <code>documentMessage</code>, &hellip; Ephemeral and view-once wrappers are unwrapped first</td></tr>
+            <tr><td><code>text</code></td><td>Body or caption, or <code>null</code> for messages with no text</td></tr>
+            <tr><td><code>timestamp</code></td><td>Unix seconds, as sent by WhatsApp</td></tr>
+          </tbody>
+        </table>
+        <p class="note">If <code>WEBHOOK_SECRET</code> is set it arrives as the <code>x-webhook-secret</code> header &mdash; check it before trusting the payload. Delivery retries up to <code>WEBHOOK_MAX_ATTEMPTS</code> times with 500ms/1s/2s backoff; a <code>4xx</code> other than 408/429 is treated as permanent.</p>
+      </div>
+
+      <div class="card span">
+        <h3>Rate limiting</h3>
+        <p style="margin-top:0">Every outgoing send passes through one serial queue that guarantees at least <code>SEND_DELAY_MS</code> (default 3000ms) between two sends. This is deliberate: firing messages back to back is what gets numbers banned.</p>
+        <ul style="margin:10px 0 0; padding-left:20px; font-size:14px">
+          <li><code>202 Accepted</code> means <em>queued and handed to WhatsApp</em>, not <em>delivered</em>.</li>
+          <li>At the default delay, 20 queued messages take about a minute to drain.</li>
+          <li>Once <code>MAX_QUEUE_SIZE</code> messages are waiting, further sends fail fast with <code>503</code> instead of growing memory. Watch <code>queued</code> in <code>GET /status</code>.</li>
+          <li>A queued message whose socket drops fails with <code>503</code> rather than being sent late on a new connection.</li>
+        </ul>
+      </div>
+
+      <div class="card span">
+        <h3>Errors</h3>
+        <p style="margin-top:0">Every error is JSON in the same shape:</p>
+        <div class="snip" id="snipError"></div>
+        <table>
+          <thead><tr><th>Status</th><th>Code</th><th>When</th></tr></thead>
+          <tbody>
+            <tr><td><code>400</code></td><td><code>bad_request</code></td><td>Malformed JSON, missing field, bad number or URL</td></tr>
+            <tr><td><code>401</code></td><td><code>unauthorized</code></td><td>Missing or wrong credential; or remote pairing attempt</td></tr>
+            <tr><td><code>404</code></td><td><code>not_found</code></td><td>No such route</td></tr>
+            <tr><td><code>409</code></td><td><code>conflict</code></td><td><code>/qr</code> or <code>/pair/start</code> while already linked</td></tr>
+            <tr><td><code>500</code></td><td><code>internal_error</code></td><td>Unexpected. Details are logged, never returned</td></tr>
+            <tr><td><code>502</code></td><td><code>upstream_error</code></td><td>WhatsApp did not acknowledge the message</td></tr>
+            <tr><td><code>503</code></td><td><code>service_unavailable</code></td><td>Not linked, no QR yet, or the send queue is full</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card span">
+        <h3>A worked example</h3>
+        <p style="margin-top:0">Link, then send one message, in plain Node with no dependencies:</p>
+        <div class="snip" id="snipNode"></div>
+      </div>
+    </div>
   </section>
 </div>
 
 <script>
 const $ = id => document.getElementById(id)
 const TOKEN_STORE = 'wa-device-token'
+const LEGACY_STORE = 'wa-api-key' // what an earlier build of this console used
 
+const BASE = location.origin
 let token = read()
 let claimId = null
 let pollTimer = null
 let connected = false
 
 // --- storage (throws in some private modes, so both sides are guarded) -------
-function read() { try { return localStorage.getItem(TOKEN_STORE) || '' } catch { return '' } }
-function write(v) { try { v ? localStorage.setItem(TOKEN_STORE, v) : localStorage.removeItem(TOKEN_STORE); return true } catch { return false } }
+function read() {
+  try { return localStorage.getItem(TOKEN_STORE) || localStorage.getItem(LEGACY_STORE) || '' }
+  catch { return '' }
+}
+function write(v) {
+  try {
+    if (v) localStorage.setItem(TOKEN_STORE, v)
+    else { localStorage.removeItem(TOKEN_STORE); localStorage.removeItem(LEGACY_STORE) }
+    return true
+  } catch { return false }
+}
 
 // --- helpers ----------------------------------------------------------------
 function show(id, data, ok) {
   const el = $(id)
   el.textContent = data == null ? '' : typeof data === 'string' ? data : JSON.stringify(data, null, 2)
-  el.className = ok === undefined ? '' : ok ? 'ok' : 'bad'
+  el.className = 'out' + (ok === undefined ? '' : ok ? ' ok' : ' bad')
 }
 
 /** Never throws: always resolves {ok, status, body} so the UI can render something. */
@@ -293,8 +439,287 @@ function busy(button, running) {
 }
 
 function screenTo(name) {
-  for (const id of ['linkScreen', 'tokenScreen', 'console']) $(id).hidden = id !== name
+  for (const id of ['linkScreen', 'tokenScreen', 'main']) $(id).hidden = id !== name
 }
+
+/** A <pre> plus a copy button. Content is set via textContent, never innerHTML. */
+function snippet(host, text) {
+  host.innerHTML = ''
+  const pre = document.createElement('pre')
+  pre.className = 'wrap-text'
+  pre.textContent = text
+  const btn = document.createElement('button')
+  btn.className = 'mini'
+  btn.textContent = 'Copy'
+  btn.onclick = async () => {
+    try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied' }
+    catch { btn.textContent = 'Copy failed' }
+    setTimeout(() => (btn.textContent = 'Copy'), 1400)
+  }
+  host.append(pre, btn)
+}
+
+// ============================== DOCS ========================================
+/** The key shown in examples: the real one, or a placeholder while masking. */
+function docKey() {
+  if ($('maskToken').checked || !token) return 'YOUR_TOKEN'
+  return token
+}
+
+const ENDPOINTS = [
+  {
+    method: 'GET', path: '/health', auth: 'public',
+    desc: 'Liveness and whether WhatsApp is linked. No credential, so it suits load balancers and Docker healthchecks.',
+    curl: (b) => `curl -s ${b}/health`,
+    res: `{
+  "status": "ok",
+  "connected": true,
+  "connection": "open",
+  "queued": 0,
+  "uptimeSeconds": 412
+}`
+  },
+  {
+    method: 'GET', path: '/status', auth: 'credential',
+    desc: 'Full diagnostics: who is linked, queue depth, webhook state, device tokens, last disconnect.',
+    curl: (b, k) => `curl -s ${b}/status \\\n  -H "x-api-key: ${k}"`,
+    res: `{
+  "session": "wa-http-api",
+  "connection": "open",
+  "connected": true,
+  "user": { "id": "918368655079:9@s.whatsapp.net", "name": "You" },
+  "hasQr": false,
+  "queued": 0,
+  "webhookConfigured": false,
+  "lastDisconnect": null,
+  "authenticatedAs": "device",
+  "deviceTokens": [
+    { "id": "9f2c1b77e4aa", "label": "console", "createdAt": "…", "lastUsedAt": "…" }
+  ]
+}`
+  },
+  {
+    method: 'POST', path: '/send/text', auth: 'credential',
+    desc: 'Send a text message. Returns 202 once it is queued.',
+    body: [
+      ['to', 'string, required', 'Number in any format, or a group JID'],
+      ['message', 'string, required', 'The text. Up to 65536 characters']
+    ],
+    curl: (b, k) => `curl -s -X POST ${b}/send/text \\\n  -H "x-api-key: ${k}" \\\n  -H "content-type: application/json" \\\n  -d '{"to": "+91 98765 43210", "message": "Hello from the API"}'`,
+    res: `{
+  "sent": true,
+  "isGroup": false,
+  "id": "3EB0C767D82B0F3A2B1C",
+  "to": "919876543210@s.whatsapp.net",
+  "timestamp": 1757248521
+}`
+  },
+  {
+    method: 'POST', path: '/send/media', auth: 'credential',
+    desc: 'Send an image, video or document by URL. The server downloads it and re-uploads to WhatsApp, so the URL only has to be reachable from the server.',
+    body: [
+      ['to', 'string, required', 'Number or group JID'],
+      ['type', 'string, required', 'One of image, video, document'],
+      ['url', 'string, required', 'http(s) only. file:// and relative paths are rejected'],
+      ['caption', 'string, optional', 'Shown under the media'],
+      ['mimetype', 'string, optional', 'Derived from the URL when omitted'],
+      ['fileName', 'string, optional', 'Documents only. Derived from the URL when omitted']
+    ],
+    curl: (b, k) => `curl -s -X POST ${b}/send/media \\\n  -H "x-api-key: ${k}" \\\n  -H "content-type: application/json" \\\n  -d '{"to": "919876543210", "type": "document", "url": "https://example.com/invoice-4471.pdf", "fileName": "Invoice 4471.pdf"}'`,
+    res: `{
+  "sent": true,
+  "type": "document",
+  "isGroup": false,
+  "id": "3EB0C7A11F9E4D2C88",
+  "to": "919876543210@s.whatsapp.net",
+  "timestamp": 1757248644
+}`
+  },
+  {
+    method: 'GET', path: '/check/:number', auth: 'credential',
+    desc: 'Ask WhatsApp whether a number is registered. A "+" in a URL path must be percent-encoded as %2B, so it is easier to leave it out.',
+    curl: (b, k) => `curl -s ${b}/check/919876543210 \\\n  -H "x-api-key: ${k}"`,
+    res: `{ "number": "919876543210", "exists": true, "jid": "919876543210@s.whatsapp.net" }`
+  },
+  {
+    method: 'GET', path: '/qr', auth: 'credential',
+    desc: 'The current pairing QR as a PNG data URL. 409 if already linked, 503 if no code has been issued yet.',
+    curl: (b, k) => `curl -s ${b}/qr -H "x-api-key: ${k}"`,
+    res: `{
+  "qr": "2@zX9...",
+  "dataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg...",
+  "generatedAt": "2026-09-07T11:25:21.816Z"
+}`
+  },
+  {
+    method: 'POST', path: '/pair/start', auth: 'loopback',
+    desc: 'Begin a pairing attempt and get a claim id to poll. Needs no credential from this machine. 409 if already linked.',
+    curl: (b) => `curl -s -X POST ${b}/pair/start`,
+    res: `{ "claimId": "vYWtym3OFi...", "expiresInMs": 600000 }`
+  },
+  {
+    method: 'GET', path: '/pair/status/:claimId', auth: 'loopback',
+    desc: 'Poll a pairing. While unpaired it carries the QR; on the first poll after the phone scans, it carries the new token exactly once. Later polls return tokenAlreadyCollected instead.',
+    curl: (b) => `curl -s ${b}/pair/status/$CLAIM_ID`,
+    res: `// before the scan
+{ "state": "awaiting_scan", "qr": "data:image/png;base64,iVBOR..." }
+
+// first poll after the scan -- store this token
+{ "state": "paired", "user": { "id": "…" }, "token": "wa_Xa9…" }
+
+// afterwards
+{ "state": "paired", "user": { "id": "…" }, "tokenAlreadyCollected": true }
+
+// or, if the attempt timed out
+{ "state": "expired", "message": "This pairing attempt expired. Start a new one." }`
+  },
+  {
+    method: 'POST', path: '/pair/token', auth: 'loopback',
+    desc: 'Already linked, but a new browser or script needs its own token. Mints one without re-pairing.',
+    curl: (b) => `curl -s -X POST ${b}/pair/token`,
+    res: `{ "id": "a1b2c3d4e5f6", "token": "wa_…", "user": { "id": "…", "name": "You" } }`
+  },
+  {
+    method: 'POST', path: '/tokens/revoke', auth: 'credential',
+    desc: 'Revoke every device token at once. The admin key keeps working, and the WhatsApp session stays linked.',
+    curl: (b, k) => `curl -s -X POST ${b}/tokens/revoke \\\n  -H "x-api-key: ${k}"`,
+    res: `{ "revoked": 2, "message": "All device tokens revoked. The admin API key still works." }`
+  },
+  {
+    method: 'POST', path: '/logout', auth: 'credential',
+    desc: 'Unlink the phone, delete the session from disk, and revoke every device token. A fresh QR is issued straight after, so you can link again.',
+    curl: (b, k) => `curl -s -X POST ${b}/logout \\\n  -H "x-api-key: ${k}"`,
+    res: `{
+  "loggedOut": true,
+  "revokedTokens": 2,
+  "message": "Session cleared and device tokens revoked. Link again from the console at /."
+}`
+  }
+]
+
+function renderDocs() {
+  const key = docKey()
+  $('docBase').textContent = BASE
+
+  snippet($('snipAuth'), `x-api-key: ${key}\n\n# or, equivalently\nAuthorization: Bearer ${key}`)
+
+  snippet($('snipError'), `{
+  "error": "bad_request",
+  "message": "\\"to\\" must contain 7-15 digits including the country code (got 3).",
+  "details": { }
+}`)
+
+  snippet($('snipWebhook'), `{
+  "session": "wa-http-api",
+  "id": "3A9F2C1B77E4",
+  "from": "120363021234567890@g.us",
+  "fromNumber": null,
+  "isGroup": true,
+  "groupJid": "120363021234567890@g.us",
+  "participant": "919999999999@s.whatsapp.net",
+  "participantNumber": "919999999999",
+  "pushName": "Asha",
+  "timestamp": 1757260800,
+  "type": "imageMessage",
+  "text": "look at this",
+  "receivedAt": "2026-09-07T12:00:00.000Z"
+}`)
+
+  snippet($('snipNode'), `const BASE = '${BASE}'
+const KEY = '${key}'
+
+async function api(path, body) {
+  const res = await fetch(BASE + path, {
+    method: body ? 'POST' : 'GET',
+    headers: { 'x-api-key': KEY, ...(body && { 'content-type': 'application/json' }) },
+    body: body && JSON.stringify(body)
+  })
+  const json = await res.json()
+  if (!res.ok) throw new Error(json.message || res.status)
+  return json
+}
+
+// is the number even on WhatsApp?
+const { exists } = await api('/check/919876543210')
+if (!exists) throw new Error('not a WhatsApp number')
+
+// send it something
+console.log(await api('/send/text', { to: '+91 98765 43210', message: 'Hi!' }))`)
+
+  const list = $('epList')
+  list.innerHTML = ''
+  for (const ep of ENDPOINTS) {
+    const d = document.createElement('details')
+    d.className = 'ep'
+
+    const s = document.createElement('summary')
+    const verb = document.createElement('span')
+    verb.className = 'verb ' + ep.method
+    verb.textContent = ep.method
+    const p = document.createElement('span')
+    p.className = 'ep-path'
+    p.textContent = ep.path
+    const badge = document.createElement('span')
+    badge.className = 'badge'
+    badge.textContent = ep.auth
+    const desc = document.createElement('p')
+    desc.className = 'ep-desc'
+    desc.textContent = ep.desc
+    s.append(verb, p, badge, desc)
+
+    const body = document.createElement('div')
+    body.className = 'ep-body'
+
+    if (ep.body) {
+      const t = document.createElement('table')
+      t.innerHTML = '<thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>'
+      const tb = document.createElement('tbody')
+      for (const [name, type, note] of ep.body) {
+        const tr = document.createElement('tr')
+        const c1 = document.createElement('td'); const codeEl = document.createElement('code')
+        codeEl.textContent = name; c1.append(codeEl)
+        const c2 = document.createElement('td'); c2.textContent = type
+        const c3 = document.createElement('td'); c3.textContent = note
+        tr.append(c1, c2, c3)
+        tb.append(tr)
+      }
+      t.append(tb)
+      body.append(t)
+    }
+
+    const reqLabel = document.createElement('h2')
+    reqLabel.textContent = 'Request'
+    reqLabel.style.margin = '18px 0 0'
+    const reqSnip = document.createElement('div')
+    reqSnip.className = 'snip'
+    snippet(reqSnip, ep.curl(BASE, key))
+
+    const resLabel = document.createElement('h2')
+    resLabel.textContent = 'Response'
+    resLabel.style.margin = '18px 0 0'
+    const resSnip = document.createElement('div')
+    resSnip.className = 'snip'
+    snippet(resSnip, ep.res)
+
+    body.append(reqLabel, reqSnip, resLabel, resSnip)
+    d.append(s, body)
+    list.append(d)
+  }
+}
+
+$('maskToken').onchange = renderDocs
+
+// --- tabs -------------------------------------------------------------------
+function tabTo(which) {
+  const docs = which === 'docs'
+  $('tabDocs').setAttribute('aria-selected', String(docs))
+  $('tabConsole').setAttribute('aria-selected', String(!docs))
+  $('paneDocs').hidden = !docs
+  $('paneConsole').hidden = docs
+  if (docs) renderDocs()
+}
+$('tabConsole').onclick = () => tabTo('console')
+$('tabDocs').onclick = () => tabTo('docs')
 
 // --- connection banner ------------------------------------------------------
 async function refreshHealth() {
@@ -315,11 +740,12 @@ async function refreshHealth() {
 $('startPair').onclick = async e => {
   busy(e.target, true)
   show('pairOut', null)
+  // Already linked? Then there is nothing to scan -- just mint a token.
+  if (connected) { busy(e.target, false); return mintWithoutPairing() }
+
   const { ok, body } = await req('/pair/start', { method: 'POST' })
   busy(e.target, false)
-
   if (!ok) {
-    // Already linked from another browser: mint a token instead of re-pairing.
     if (body.error === 'conflict') return mintWithoutPairing()
     return show('pairOut', body, false)
   }
@@ -334,21 +760,17 @@ async function mintWithoutPairing() {
   adopt(body.token, body.user, null)
 }
 
-function poll() {
-  clearTimeout(pollTimer)
-  pollTimer = setTimeout(tick, 1200)
-}
+function poll() { clearTimeout(pollTimer); pollTimer = setTimeout(tick, 1200) }
 
 async function tick() {
   if (!claimId) return
   const { ok, body } = await req('/pair/status/' + encodeURIComponent(claimId))
-
   if (!ok) { show('pairOut', body, false); return poll() }
 
   if (body.state === 'expired') {
     claimId = null
-    $('qrHolder').innerHTML = '<button class="big" id="startPair2">Start again</button>'
-    $('startPair2').onclick = () => location.reload()
+    $('qrHolder').innerHTML = '<button class="big" id="restart">Start again</button>'
+    $('restart').onclick = () => location.reload()
     return show('pairOut', 'That pairing attempt expired. Start again.', false)
   }
 
@@ -359,8 +781,11 @@ async function tick() {
 
   if (body.qr) {
     const img = $('qrHolder').querySelector('img')
-    if (img) { img.src = body.qr }
-    else { $('qrHolder').innerHTML = '<img alt="WhatsApp pairing QR code" />'; $('qrHolder').querySelector('img').src = body.qr }
+    if (img) img.src = body.qr
+    else {
+      $('qrHolder').innerHTML = '<img alt="WhatsApp pairing QR code" />'
+      $('qrHolder').querySelector('img').src = body.qr
+    }
   }
   poll()
 }
@@ -369,9 +794,8 @@ async function tick() {
 function adopt(fresh, user, alreadyCollected) {
   refreshHealth()
   if (!fresh) {
-    // Another tab collected it; that tab has the token, this one cannot.
     return show('pairOut', alreadyCollected
-      ? 'Linked, but the token was already collected by another tab. Use that tab, or revoke and relink.'
+      ? 'Linked, but the token was already collected by another tab. Use that tab, or revoke and link again.'
       : 'Linked, but no token came back.', false)
   }
   token = fresh
@@ -388,7 +812,8 @@ $('copyToken').onclick = async e => {
   try { await navigator.clipboard.writeText($('tokenValue').textContent); e.target.textContent = 'Copied' }
   catch { e.target.textContent = 'Copy failed — select it by hand' }
 }
-$('gotoConsole').onclick = () => { screenTo('console'); refreshAll() }
+$('gotoConsole').onclick = () => { screenTo('main'); tabTo('console'); refreshStatus() }
+$('gotoDocsFromToken').onclick = () => { screenTo('main'); tabTo('docs') }
 
 $('useManual').onclick = async e => {
   const value = $('manualToken').value.trim()
@@ -400,8 +825,7 @@ $('useManual').onclick = async e => {
   busy(e.target, false)
   if (!ok) { token = previous; return show('pairOut', body, false) }
   write(value)
-  screenTo('console')
-  refreshAll()
+  screenTo('main'); tabTo('console'); refreshStatus()
 }
 
 // --- console ----------------------------------------------------------------
@@ -409,7 +833,6 @@ async function refreshStatus() {
   const { ok, body } = await req('/status')
   if (!ok) {
     $('statusBox').textContent = ''
-    // A revoked or wrong token means this browser is signed out.
     if (body.error === 'unauthorized') signOut()
     return
   }
@@ -433,6 +856,7 @@ async function refreshStatus() {
 function signOut() {
   token = ''
   write('')
+  updateLinkScreen()
   screenTo('linkScreen')
 }
 
@@ -479,21 +903,42 @@ $('logout').onclick = async e => {
 $('refreshStatus').onclick = () => refreshStatus()
 
 // --- boot -------------------------------------------------------------------
+/** The link screen says different things depending on whether a phone is on. */
+function updateLinkScreen() {
+  if (connected) {
+    $('linkTitle').textContent = 'Get your API token'
+    $('linkBlurb').textContent = 'A phone is already linked to this server, so there is nothing to scan. Mint a token for this browser instead.'
+    $('startPair').textContent = 'Get my API token'
+    $('linkSteps').hidden = true
+  } else {
+    $('linkTitle').textContent = 'Link your WhatsApp'
+    $('linkBlurb').textContent = 'Scan the code with your phone, exactly like WhatsApp Web. Your API token is created automatically once it connects — nothing to copy by hand.'
+    $('startPair').textContent = 'Link WhatsApp'
+    $('linkSteps').hidden = false
+  }
+}
+
 async function refreshAll() {
   await refreshHealth()
-  if (!$('console').hidden) await refreshStatus()
+  if (!$('main').hidden && !$('paneConsole').hidden) await refreshStatus()
+  if (!$('linkScreen').hidden) updateLinkScreen()
 }
 
 async function boot() {
   await refreshHealth()
+  updateLinkScreen()
+
   if (!token) {
     screenTo('linkScreen')
   } else {
-    // Verify the stored token still works before showing the console.
     const { ok, body } = await req('/status')
-    if (ok) { screenTo('console'); refreshStatus() }
-    else if (body.error === 'unauthorized') signOut()
-    else { screenTo('console'); refreshStatus() }
+    if (!ok && body.error === 'unauthorized') {
+      signOut()
+    } else {
+      screenTo('main')
+      tabTo('console')
+      refreshStatus()
+    }
   }
   setInterval(refreshAll, 5000)
 }

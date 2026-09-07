@@ -77,9 +77,18 @@ The token is also DMed to your own WhatsApp chat, so it lands on the phone as
 well — turn that off with `SEND_TOKEN_TO_PHONE=false` if you would rather no
 credential ever touched a chat log.
 
-After that the panel gives you live status, send text, send media, number
-lookup, and unlink. It is plain static HTML served by the API itself, so it
-talks to the same origin — no CORS, no proxy, no build step.
+After that the panel has two tabs:
+
+- **Console** — live status, send text, send media, number lookup, unlink.
+- **API docs** — the whole reference, in the page: every endpoint with its
+  request body, a copy-ready curl example **with your own token already filled
+  in**, and a sample response. Plus recipient formats, the webhook payload,
+  rate-limiting behaviour, and the error table. A *mask my token* checkbox
+  swaps in a placeholder when you want to screenshot it.
+
+It is plain static HTML served by the API itself, so it talks to the same
+origin — no CORS, no proxy, no build step. The HTML is sent with
+`Cache-Control: no-cache` so an updated server never leaves you on a stale page.
 
 ## Authentication
 

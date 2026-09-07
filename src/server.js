@@ -95,7 +95,19 @@ export function createServer(client, { tokens, pairing }) {
   // --- public -------------------------------------------------------------
   // The console at / holds no secrets: it gets its token from the pairing flow
   // below and keeps it in the browser's localStorage.
-  app.use(express.static(PUBLIC_DIR, { index: 'index.html', maxAge: '1h' }))
+  // No max-age on the HTML. The console ships with the server, so a cached copy
+  // goes stale the moment the server is updated -- which stranded a real user on
+  // an old page. ETags keep revalidation down to a 304.
+  app.use(
+    express.static(PUBLIC_DIR, {
+      index: 'index.html',
+      etag: true,
+      lastModified: true,
+      setHeaders(res, filePath) {
+        if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache')
+      }
+    })
+  )
 
   app.get('/health', (_req, res) => {
     const status = client.status()
