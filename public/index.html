@@ -133,7 +133,9 @@
   .link-hero { text-align: center; padding: 26px 18px 30px; }
   .link-hero h3 { margin: 0 0 8px; font-size: 19px; }
   .link-hero p { margin: 0 auto 20px; color: var(--muted); max-width: 46ch; font-size: 14px; }
-  #qrHolder { min-height: 200px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; }
+  #qrHolder { min-height: 120px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; }
+  #qrHolder:empty { min-height: 0; }
+  .hero-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
   #qrHolder img { width: 264px; max-width: 78vw; border-radius: 10px; background: #fff; padding: 12px; }
   .steps { list-style: none; padding: 0; margin: 22px auto 0; max-width: 34ch; text-align: left; font-size: 13.5px; color: var(--muted); counter-reset: s; }
   .steps li { counter-increment: s; margin: 7px 0; padding-left: 26px; position: relative; }
@@ -182,7 +184,10 @@
       <h3 id="linkTitle">Link your WhatsApp</h3>
       <p id="linkBlurb">Scan the code with your phone, exactly like WhatsApp Web. Your API token is created automatically once it connects &mdash; nothing to copy by hand.</p>
 
-      <div id="qrHolder">
+      <!-- Only the contents of #qrHolder are ever replaced. Controls live
+           outside it, so redrawing the QR cannot destroy them. -->
+      <div id="qrHolder"></div>
+      <div class="hero-actions">
         <button class="big" id="startPair">Link WhatsApp</button>
       </div>
 
@@ -240,6 +245,22 @@
             <button class="danger" id="logout">Unlink phone</button>
           </div>
           <pre class="out" id="logoutOut"></pre>
+        </div>
+
+        <div class="card span">
+          <h2>Message test</h2>
+          <p style="margin-top:0;font-size:14px">
+            Sends one real message and reports what happened at each step, so you can tell
+            a config problem from a WhatsApp problem.
+          </p>
+          <label for="testTo">Send to <span class="hint">defaults to your own number, so nobody else is bothered</span></label>
+          <div class="row">
+            <input id="testTo" placeholder="loading…" style="flex: 3 1 240px" />
+            <button id="runTest" style="flex: 0 0 auto">Run test</button>
+            <button class="ghost" id="resetTestTo" style="flex: 0 0 auto">Use my number</button>
+          </div>
+          <div id="testSteps"></div>
+          <pre class="out" id="testOut"></pre>
         </div>
 
         <div class="card">
@@ -736,6 +757,37 @@ async function refreshHealth() {
   }
 }
 
+// --- the QR holder: the ONLY writers to its contents ------------------------
+// Controls used to live inside this element, so redrawing the QR deleted them
+// and every later refresh threw on a null node. Nothing but these helpers
+// touches it now, and they only ever replace its children.
+function holderSpinner(text) {
+  const spin = document.createElement('div')
+  spin.className = 'spinner'
+  const p = document.createElement('p')
+  p.className = 'hint'
+  p.textContent = text
+  $('qrHolder').replaceChildren(spin, p)
+}
+
+function holderText(text) {
+  const p = document.createElement('p')
+  p.className = 'hint'
+  p.textContent = text
+  $('qrHolder').replaceChildren(p)
+}
+
+/** Reuse the <img> when it is already there, so a refreshed QR does not flicker. */
+function holderQr(dataUrl) {
+  let img = $('qrHolder').querySelector('img')
+  if (!img) {
+    img = document.createElement('img')
+    img.alt = 'WhatsApp pairing QR code'
+    $('qrHolder').replaceChildren(img)
+  }
+  img.src = dataUrl
+}
+
 // --- pairing ----------------------------------------------------------------
 $('startPair').onclick = async e => {
   busy(e.target, true)
@@ -750,7 +802,8 @@ $('startPair').onclick = async e => {
     return show('pairOut', body, false)
   }
   claimId = body.claimId
-  $('qrHolder').innerHTML = '<div class="spinner"></div><p class="hint">Waiting for a code…</p>'
+  $('startPair').hidden = true
+  holderSpinner('Waiting for a code…')
   poll()
 }
 
@@ -769,8 +822,9 @@ async function tick() {
 
   if (body.state === 'expired') {
     claimId = null
-    $('qrHolder').innerHTML = '<button class="big" id="restart">Start again</button>'
-    $('restart').onclick = () => location.reload()
+    holderText('That code expired.')
+    $('startPair').hidden = false
+    $('startPair').textContent = 'Try again'
     return show('pairOut', 'That pairing attempt expired. Start again.', false)
   }
 
@@ -779,14 +833,7 @@ async function tick() {
     return adopt(body.token, body.user, body.tokenAlreadyCollected)
   }
 
-  if (body.qr) {
-    const img = $('qrHolder').querySelector('img')
-    if (img) img.src = body.qr
-    else {
-      $('qrHolder').innerHTML = '<img alt="WhatsApp pairing QR code" />'
-      $('qrHolder').querySelector('img').src = body.qr
-    }
-  }
+  if (body.qr) holderQr(body.qr)
   poll()
 }
 
@@ -842,6 +889,15 @@ async function refreshStatus() {
     if (body.error === 'unauthorized') signOut()
     return
   }
+  // Own number, for the message test. The JID carries a device suffix
+  // (918368655079:9@s.whatsapp.net), which is not part of the number.
+  if (body.user?.id) {
+    myNumber = body.user.id.split('@')[0].split(':')[0]
+    const box = $('testTo')
+    box.placeholder = myNumber
+    if (!box.value) box.value = myNumber
+  }
+
   const rows = [
     ['connection', body.connection],
     ['linked as', body.user ? (body.user.name ? body.user.name + ' — ' + body.user.id : body.user.id) : '—'],
@@ -909,6 +965,96 @@ $('logout').onclick = async e => {
 
 $('refreshStatus').onclick = () => refreshStatus()
 
+// --- message test -----------------------------------------------------------
+/** The linked account's own number, so the default test bothers nobody else. */
+let myNumber = ''
+
+function testStep(label, state, detail) {
+  const row = document.createElement('div')
+  row.className = 'stat'
+  const left = document.createElement('span')
+  left.textContent = label
+  const right = document.createElement('span')
+  const mark = state === 'ok' ? '✓ ' : state === 'bad' ? '✗ ' : '· '
+  right.textContent = mark + (detail ?? '')
+  right.style.color = state === 'ok' ? 'var(--ok)' : state === 'bad' ? 'var(--bad)' : 'var(--muted)'
+  row.append(left, right)
+  $('testSteps').append(row)
+  return right
+}
+
+$('resetTestTo').onclick = () => {
+  $('testTo').value = myNumber
+}
+
+$('runTest').onclick = async e => {
+  const target = $('testTo').value.trim()
+  if (!target) return show('testOut', { error: 'no_target', message: 'Enter a number first.' }, false)
+
+  busy(e.target, true)
+  $('testSteps').replaceChildren()
+  show('testOut', null)
+
+  // 1. is the socket actually up?
+  const health = await req('/health')
+  if (!health.body?.connected) {
+    testStep('WhatsApp connection', 'bad', health.body?.connection ?? 'unreachable')
+    busy(e.target, false)
+    return show('testOut', { stoppedAt: 'connection', ...health.body }, false)
+  }
+  testStep('WhatsApp connection', 'ok', health.body.connection)
+
+  // 2. does the number exist on WhatsApp? Catches typos before we send.
+  const isGroup = target.includes('@g.us')
+  if (isGroup) {
+    testStep('Recipient check', 'skip', 'group JID, cannot be checked')
+  } else {
+    const check = await req('/check/' + encodeURIComponent(target))
+    if (!check.ok) {
+      testStep('Recipient check', 'bad', check.body?.message ?? String(check.status))
+      busy(e.target, false)
+      return show('testOut', { stoppedAt: 'check', ...check.body }, false)
+    }
+    if (!check.body.exists) {
+      testStep('Recipient check', 'bad', 'not registered on WhatsApp')
+      busy(e.target, false)
+      return show('testOut', { stoppedAt: 'check', ...check.body }, false)
+    }
+    testStep('Recipient check', 'ok', check.body.jid)
+  }
+
+  // 3. send it, and time the round trip
+  const stamp = new Date().toLocaleTimeString()
+  const queued = testStep('Send', 'skip', 'queued…')
+  const started = performance.now()
+  const sent = await req('/send/text', {
+    method: 'POST',
+    body: JSON.stringify({ to: target, message: `Test from wa-http-api at ${stamp} ✓` })
+  })
+  const ms = Math.round(performance.now() - started)
+
+  if (!sent.ok) {
+    queued.textContent = '✗ ' + (sent.body?.message ?? String(sent.status))
+    queued.style.color = 'var(--bad)'
+    busy(e.target, false)
+    return show('testOut', { stoppedAt: 'send', ...sent.body }, false)
+  }
+  queued.textContent = `✓ accepted in ${ms}ms`
+  queued.style.color = 'var(--ok)'
+  testStep('Message id', 'ok', sent.body.id ?? '—')
+  testStep('Delivered to', 'ok', sent.body.to ?? target)
+
+  // SEND_DELAY_MS means "accepted" is not "handed to WhatsApp yet".
+  const st = await req('/status')
+  if (st.ok && st.body.queued > 0) {
+    testStep('Queue', 'skip', `${st.body.queued} still waiting (SEND_DELAY_MS)`)
+  }
+
+  busy(e.target, false)
+  show('testOut', sent.body, true)
+  refreshStatus()
+}
+
 // --- boot -------------------------------------------------------------------
 /** Are we talking to the server over loopback? Decides whether pairing is open. */
 const isLocalHost = ['localhost', '127.0.0.1', '::1', ''].includes(location.hostname)
@@ -921,6 +1067,10 @@ let authed = false
  * where pairing is not open -- ask for the admin key first.
  */
 function updateLinkScreen() {
+  // A pairing is mid-flight: the poll owns the button and the holder, so leave
+  // them alone rather than resetting them under it every refresh.
+  if (claimId) return
+
   const needsKeyFirst = !isLocalHost && !authed
 
   if (needsKeyFirst) {
@@ -961,12 +1111,16 @@ async function checkAuth() {
 
 /** The console is only useful once we are BOTH signed in and actually linked. */
 function route() {
+  // The token is shown exactly once, so no timer may navigate off that screen.
+  // The reader has to leave it deliberately.
+  if (!$('tokenScreen').hidden) return
+
   if (authed && connected) {
     if ($('main').hidden) {
       screenTo('main')
       tabTo('console')
     }
-  } else if ($('tokenScreen').hidden) {
+  } else {
     updateLinkScreen()
     screenTo('linkScreen')
   }

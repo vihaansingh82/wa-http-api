@@ -50,6 +50,70 @@ const handlerIds = [...js.matchAll(/\$\('([^']+)'\)\.(onclick|onchange)/g)].map(
 const badHandlers = handlerIds.filter(id => !declaredIds.has(id) && !runtimeIds.has(id))
 check(`all ${handlerIds.length} handler targets exist`, badHandlers.length === 0, badHandlers.join(', '))
 
+// ---- 4b. no scripted element may live inside a container we overwrite ------
+// The bug: #startPair sat inside #qrHolder, and redrawing the QR replaced that
+// element's children -- deleting the button. Every later refresh then threw on
+// a null node. So: any id the script touches must not be nested inside a
+// container the script rewrites wholesale.
+const rewritten = new Set([
+  ...[...js.matchAll(/\$\('([^']+)'\)\.innerHTML\s*=/g)].map(m => m[1]),
+  ...[...js.matchAll(/\$\('([^']+)'\)\.replaceChildren\(/g)].map(m => m[1])
+])
+check('script rewrites at least one container (guard is live)', rewritten.size > 0, [...rewritten].join(','))
+
+/** The inner HTML of the element carrying this id, by matching nested tags. */
+function innerHtmlOf(id) {
+  const at = html.indexOf(`id="${id}"`)
+  if (at === -1) return null
+  const tagStart = html.lastIndexOf('<', at)
+  const tag = html.slice(tagStart + 1).match(/^([a-zA-Z][\w-]*)/)?.[1]
+  if (!tag) return null
+  const openEnd = html.indexOf('>', at)
+  if (openEnd === -1) return null
+  if (html[openEnd - 1] === '/') return '' // self-closed, no children
+
+  const open = new RegExp(`<${tag}\\b`, 'gi')
+  const close = new RegExp(`</${tag}\\s*>`, 'gi')
+  let depth = 1
+  let cursor = openEnd + 1
+  while (depth > 0 && cursor < html.length) {
+    open.lastIndex = cursor
+    close.lastIndex = cursor
+    const nextOpen = open.exec(html)
+    const nextClose = close.exec(html)
+    if (!nextClose) return html.slice(openEnd + 1)
+    if (nextOpen && nextOpen.index < nextClose.index) {
+      depth++
+      cursor = nextOpen.index + nextOpen[0].length
+    } else {
+      depth--
+      if (depth === 0) return html.slice(openEnd + 1, nextClose.index)
+      cursor = nextClose.index + nextClose[0].length
+    }
+  }
+  return html.slice(openEnd + 1)
+}
+
+// Prove the extractor works before trusting what it reports.
+check('nesting extractor finds a known child', (innerHtmlOf('main') ?? '').includes('id="tabDocs"'))
+check('nesting extractor reports an empty container as empty', innerHtmlOf('qrHolder') === '')
+
+const nestingViolations = []
+for (const container of rewritten) {
+  const inner = innerHtmlOf(container)
+  if (inner == null) continue
+  for (const m of inner.matchAll(/\bid="([^"]+)"/g)) {
+    if (m[1] !== container && referenced.has(m[1])) {
+      nestingViolations.push(`${m[1]} is inside #${container}`)
+    }
+  }
+}
+check('no scripted id nested in a rewritten container', nestingViolations.length === 0, nestingViolations.join('; '))
+
+// ---- 4c. the one-time token screen is never left on a timer ----------------
+const routeFn = js.match(/function route\(\)\s*\{[\s\S]*?\n\}/)?.[0] ?? ''
+check('route() guards the token screen', /tokenScreen'\)\.hidden\)\s*return/.test(routeFn), routeFn.slice(0, 160))
+
 // ---- 5. no secrets baked into the shipped file -----------------------------
 check('no wa_ token literal in the file', !/wa_[A-Za-z0-9_-]{40,}/.test(html))
 check('no hex API key literal in the file', !/\b[0-9a-f]{48,}\b/.test(html))
