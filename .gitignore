@@ -1,0 +1,14 @@
+node_modules/
+
+# The session. Anyone with a copy of this folder can send messages as you.
+auth/
+.env
+
+# Runtime output from a local run: server.log contains the pairing key material
+# (eIdent / eSkeyVal / eSkeySig) and qr.png is a live pairing code.
+*.log
+npm-debug.log*
+qr.png
+qr.json
+
+.DS_Store

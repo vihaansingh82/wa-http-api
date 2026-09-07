@@ -1,0 +1,17 @@
+services:
+  wa-http-api:
+    build: .
+    restart: unless-stopped
+    # Reaps zombies and forwards SIGTERM so shutdown stays graceful.
+    init: true
+    ports:
+      - "3000:3000"
+    env_file: .env
+    environment:
+      AUTH_DIR: /app/auth
+    volumes:
+      # Named volume so the paired session survives rebuilds.
+      - wa-auth:/app/auth
+
+volumes:
+  wa-auth:
