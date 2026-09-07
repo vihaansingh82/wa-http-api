@@ -50,6 +50,10 @@ export const config = {
   sendTokenToPhone: bool('SEND_TOKEN_TO_PHONE', true),
   // How long a "Link WhatsApp" attempt stays claimable.
   pairClaimTtlMs: int('PAIR_CLAIM_TTL_MS', 600000, { min: 30000, max: 3600000 }),
+  // Treat a direct loopback connection as the operator being at the machine.
+  // Set false when this sits behind a proxy or tunnel that you do not control,
+  // as a belt-and-braces measure on top of the forwarded-header detection.
+  trustLoopbackPairing: bool('TRUST_LOOPBACK_PAIRING', true),
   // Allow starting a pairing from a non-loopback address without the admin key.
   // Off by default: it would let anyone who can reach the port open a pairing.
   allowRemotePairing: bool('ALLOW_REMOTE_PAIRING', false),

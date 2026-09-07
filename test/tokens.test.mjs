@@ -112,6 +112,34 @@ if (!lanIp) {
   const consoleViaLan = await fetch(`http://${lanIp}:${port}/`)
   check('the console page itself is still reachable over LAN', consoleViaLan.status === 200)
 
+  // ---- 5. a tunnel or proxy must not inherit the loopback exemption --------
+  // cloudflared, ngrok and nginx all connect to us over loopback. Without the
+  // forwarded-header check, every visitor on the internet would look local and
+  // could mint a working API token from /pair/token.
+  console.log('\n--- forwarded requests are not treated as local ---')
+  const proxyHeaders = ['x-forwarded-for', 'x-real-ip', 'cf-connecting-ip', 'forwarded', 'fly-client-ip', 'x-forwarded-host']
+  for (const header of proxyHeaders) {
+    const res = await fetch(`http://127.0.0.1:${port}/pair/start`, {
+      method: 'POST',
+      headers: { [header]: '203.0.113.9' }
+    })
+    check(`loopback + ${header} is refused`, res.status === 401, 'got ' + res.status)
+  }
+
+  const mint = await fetch(`http://127.0.0.1:${port}/pair/token`, {
+    method: 'POST',
+    headers: { 'x-forwarded-for': '203.0.113.9' }
+  })
+  check('/pair/token is refused through a proxy', mint.status === 401, 'got ' + mint.status)
+
+  const proxiedWithKey = await fetch(`http://127.0.0.1:${port}/pair/start`, {
+    method: 'POST',
+    headers: { 'x-forwarded-for': '203.0.113.9', 'x-api-key': process.env.API_KEY }
+  })
+  check('proxied pairing WITH the admin key is allowed', proxiedWithKey.status === 201, 'got ' + proxiedWithKey.status)
+
+  check('a plain local request still works', (await fetch(`http://127.0.0.1:${port}/health`)).status === 200)
+
   server.close()
 }
 

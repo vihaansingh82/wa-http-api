@@ -43,7 +43,33 @@ function presentedCredential(req) {
  * secret. Proxy headers are deliberately not consulted -- only the real peer.
  */
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1'])
-const isLoopback = req => LOOPBACK.has(req.socket?.remoteAddress ?? '')
+
+/**
+ * Headers that only ever appear when something forwarded the request. Their
+ * presence is proof this is NOT a direct local connection, whatever the socket
+ * says.
+ */
+const FORWARDED_HEADERS = [
+  'x-forwarded-for',
+  'x-forwarded-host',
+  'x-real-ip',
+  'forwarded',
+  'cf-connecting-ip',
+  'fly-client-ip'
+]
+
+/**
+ * A reverse proxy or tunnel (cloudflared, ngrok, nginx, Render, Fly) connects to
+ * this process over loopback, so the peer address alone would make every visitor
+ * on the internet look local -- and hand them the pairing routes, which mint API
+ * tokens. So a forwarded request is never local, and the exemption can be turned
+ * off outright with TRUST_LOOPBACK_PAIRING=false.
+ */
+const isLoopback = req => {
+  if (!config.trustLoopbackPairing) return false
+  if (FORWARDED_HEADERS.some(header => req.get(header))) return false
+  return LOOPBACK.has(req.socket?.remoteAddress ?? '')
+}
 
 export function createServer(client, { tokens, pairing }) {
   /** Admin key or any live device token gets you in. */
