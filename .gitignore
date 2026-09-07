@@ -4,6 +4,9 @@ node_modules/
 auth/
 .env
 
+# Hashed device tokens minted by the pairing flow.
+data/
+
 # Runtime output from a local run: server.log contains the pairing key material
 # (eIdent / eSkeyVal / eSkeySig) and qr.png is a live pairing code.
 *.log
@@ -12,3 +15,6 @@ qr.png
 qr.json
 
 .DS_Store
+
+# Stray empty file in the project root, not part of the project.
+/file

@@ -3,6 +3,7 @@ import makeWASocket, {
   Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
+  jidNormalizedUser,
   makeCacheableSignalKeyStore,
   useMultiFileAuthState
 } from 'baileys'
@@ -25,7 +26,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 const isSessionDead = statusCode =>
   statusCode === DisconnectReason.loggedOut || statusCode === DisconnectReason.forbidden
 
-export function createWhatsAppClient() {
+export function createWhatsAppClient({ onConnected } = {}) {
   const queue = createSendQueue({
     minDelayMs: config.sendDelayMs,
     maxSize: config.maxQueueSize,
@@ -148,6 +149,14 @@ export function createWhatsAppClient() {
       lastDisconnect = null
       await setQr(null)
       logger.info({ user: sock?.user?.id, version: waVersion }, 'connected to WhatsApp')
+
+      if (onConnected) {
+        const user = sock?.user ? { id: sock.user.id, name: sock.user.name ?? null } : null
+        // Never let a pairing-side failure knock the socket over.
+        await Promise.resolve(onConnected(user)).catch(err =>
+          logger.error({ err }, 'onConnected hook failed')
+        )
+      }
       return
     }
 
@@ -328,6 +337,13 @@ export function createWhatsAppClient() {
 
     sendText(jid, message) {
       return enqueueSend(jid, { text: message }, 'text')
+    },
+
+    /** Message the linked account itself -- used to deliver the device token. */
+    sendToSelf(message) {
+      const me = sock?.user?.id
+      if (!me) throw ApiError.unavailable('Not connected, so there is no own JID to send to.')
+      return enqueueSend(jidNormalizedUser(me), { text: message }, 'self')
     },
 
     sendMedia(jid, content) {

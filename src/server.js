@@ -21,24 +21,62 @@ const httpLogger = logger.child({ module: 'http' })
 /** Resolved from this file, so the console is found whatever the cwd is. */
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public')
 
-/** Constant-time comparison so the API key cannot be guessed byte by byte. */
-function keyMatches(provided) {
+/** Constant-time comparison so the admin key cannot be guessed byte by byte. */
+function adminKeyMatches(provided) {
   const a = Buffer.from(String(provided))
   const b = Buffer.from(config.apiKey)
   if (a.length !== b.length) return false
   return timingSafeEqual(a, b)
 }
 
-function apiKeyAuth(req, _res, next) {
-  const provided = req.get('x-api-key')
-  if (!provided || !keyMatches(provided)) {
-    httpLogger.warn({ path: req.path, ip: req.ip }, 'rejected request with bad api key')
-    return next(ApiError.unauthorized())
-  }
-  next()
+/** Accept the credential from `x-api-key` or a bearer header, whichever is set. */
+function presentedCredential(req) {
+  const header = req.get('x-api-key')
+  if (header) return header
+  const auth = req.get('authorization') ?? ''
+  return auth.startsWith('Bearer ') ? auth.slice(7).trim() : ''
 }
 
-export function createServer(client) {
+/**
+ * Loopback callers are treated as the operator sitting at the machine, which is
+ * what makes "open localhost and click Link WhatsApp" work with no bootstrap
+ * secret. Proxy headers are deliberately not consulted -- only the real peer.
+ */
+const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1'])
+const isLoopback = req => LOOPBACK.has(req.socket?.remoteAddress ?? '')
+
+export function createServer(client, { tokens, pairing }) {
+  /** Admin key or any live device token gets you in. */
+  function authenticate(req, _res, next) {
+    const provided = presentedCredential(req)
+    if (provided) {
+      if (adminKeyMatches(provided)) {
+        req.auth = { kind: 'admin' }
+        return next()
+      }
+      const tokenId = tokens.verify(provided)
+      if (tokenId) {
+        req.auth = { kind: 'device', tokenId }
+        return next()
+      }
+    }
+    httpLogger.warn({ path: req.path, ip: req.socket?.remoteAddress }, 'rejected request with bad credential')
+    return next(ApiError.unauthorized('Missing or invalid credential. Send the API key or a device token as x-api-key.'))
+  }
+
+  /** The pairing routes are open on loopback and locked down everywhere else. */
+  function pairingGate(req, _res, next) {
+    if (isLoopback(req) || config.allowRemotePairing) return next()
+    const provided = presentedCredential(req)
+    if (provided && adminKeyMatches(provided)) return next()
+    httpLogger.warn({ ip: req.socket?.remoteAddress }, 'rejected remote pairing attempt')
+    return next(
+      ApiError.unauthorized(
+        'Pairing can only be started from this machine. Send the admin API key, or set ALLOW_REMOTE_PAIRING=true if you have put the server behind your own access control.'
+      )
+    )
+  }
+
   const app = express()
   app.disable('x-powered-by')
   // Deliberately not trusting proxy headers: req.ip is only used for logging,
@@ -55,9 +93,8 @@ export function createServer(client) {
   })
 
   // --- public -------------------------------------------------------------
-  // The console at / is static HTML with no secrets in it; the operator pastes
-  // the API key into the page, which keeps it in localStorage and sends it as
-  // x-api-key like any other client.
+  // The console at / holds no secrets: it gets its token from the pairing flow
+  // below and keeps it in the browser's localStorage.
   app.use(express.static(PUBLIC_DIR, { index: 'index.html', maxAge: '1h' }))
 
   app.get('/health', (_req, res) => {
@@ -71,11 +108,40 @@ export function createServer(client) {
     })
   })
 
-  // --- everything below needs the API key ---------------------------------
-  app.use(apiKeyAuth)
+  // --- pairing: loopback-open, so the console needs no bootstrap secret ----
+  app.post('/pair/start', pairingGate, (_req, res) => {
+    res.status(201).json(pairing.start())
+  })
 
-  app.get('/status', (_req, res) => {
-    res.json({ session: config.sessionName, ...client.status() })
+  app.get('/pair/status/:claimId', pairingGate, (req, res) => {
+    res.json(pairing.status(req.params.claimId))
+  })
+
+  // Already linked but on a new browser: mint a token without re-pairing. Same
+  // loopback gate, so being at the machine is still what authorises it.
+  app.post('/pair/token', pairingGate, async (_req, res) => {
+    if (!client.isConnected()) {
+      throw ApiError.unavailable('Not linked yet. Start a pairing at POST /pair/start.')
+    }
+    const { id, token } = await tokens.create('console')
+    res.status(201).json({ id, token, user: client.status().user })
+  })
+
+  // --- everything below needs the admin key or a device token --------------
+  app.use(authenticate)
+
+  app.get('/status', (req, res) => {
+    res.json({
+      session: config.sessionName,
+      ...client.status(),
+      authenticatedAs: req.auth.kind,
+      deviceTokens: tokens.list()
+    })
+  })
+
+  app.post('/tokens/revoke', async (_req, res) => {
+    const revoked = await tokens.revokeAll()
+    res.json({ revoked, message: 'All device tokens revoked. The admin API key still works.' })
   })
 
   app.get('/qr', (_req, res) => {
@@ -118,8 +184,15 @@ export function createServer(client) {
   })
 
   app.post('/logout', async (_req, res) => {
+    // The session is gone, so every device token it backed must go too --
+    // otherwise an old token would keep working against the next pairing.
+    const revoked = await tokens.revokeAll()
     const result = await client.logout()
-    res.json({ ...result, message: 'Session cleared. A new QR will appear at GET /qr shortly.' })
+    res.json({
+      ...result,
+      revokedTokens: revoked,
+      message: 'Session cleared and device tokens revoked. Link again from the console at /.'
+    })
   })
 
   // --- fallbacks ----------------------------------------------------------

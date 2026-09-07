@@ -44,6 +44,15 @@ export const config = {
   apiKey,
   authDir: path.resolve(str('AUTH_DIR', './auth')),
   sessionName: str('SESSION_NAME', 'wa-http-api'),
+  // Device tokens minted by the browser pairing flow (stored hashed).
+  tokenStore: path.resolve(str('TOKEN_STORE', './data/tokens.json')),
+  // Also DM the new token to the linked account, so it lands on the phone.
+  sendTokenToPhone: bool('SEND_TOKEN_TO_PHONE', true),
+  // How long a "Link WhatsApp" attempt stays claimable.
+  pairClaimTtlMs: int('PAIR_CLAIM_TTL_MS', 600000, { min: 30000, max: 3600000 }),
+  // Allow starting a pairing from a non-loopback address without the admin key.
+  // Off by default: it would let anyone who can reach the port open a pairing.
+  allowRemotePairing: bool('ALLOW_REMOTE_PAIRING', false),
   sendDelayMs: int('SEND_DELAY_MS', 3000, { min: 0, max: 600000 }),
   maxQueueSize: int('MAX_QUEUE_SIZE', 500, { min: 1, max: 100000 }),
   webhookUrl,

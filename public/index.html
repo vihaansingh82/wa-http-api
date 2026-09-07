@@ -85,6 +85,7 @@
   button:disabled { opacity: 0.5; cursor: not-allowed; }
   button.ghost { background: transparent; color: var(--text); border-color: var(--border); font-weight: 500; }
   button.danger { background: transparent; color: var(--bad); border-color: var(--bad); font-weight: 500; }
+  button.big { padding: 13px 26px; font-size: 15px; }
   .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; align-items: center; }
 
   pre {
@@ -96,14 +97,41 @@
   pre.ok { border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); }
   pre.bad { border-color: color-mix(in srgb, var(--bad) 45%, var(--border)); }
 
-  #qrBox { text-align: center; }
-  #qrBox img { width: 100%; max-width: 288px; border-radius: 8px; background: #fff; padding: 10px; }
   .stat { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px dashed var(--border); font-size: 14px; }
   .stat:last-child { border-bottom: 0; }
   .stat span:first-child { color: var(--muted); }
   .stat span:last-child { font-family: ui-monospace, Menlo, Consolas, monospace; text-align: right; word-break: break-all; }
   .note { font-size: 12.5px; color: var(--muted); margin-top: 12px; }
   a { color: var(--accent); }
+
+  /* ---- linking screen ---- */
+  .link-hero { text-align: center; padding: 26px 18px 30px; }
+  .link-hero h3 { margin: 0 0 8px; font-size: 19px; }
+  .link-hero p { margin: 0 auto 20px; color: var(--muted); max-width: 44ch; font-size: 14px; }
+  #qrHolder { min-height: 200px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; }
+  #qrHolder img { width: 264px; max-width: 78vw; border-radius: 10px; background: #fff; padding: 12px; }
+  .steps { list-style: none; padding: 0; margin: 22px auto 0; max-width: 34ch; text-align: left; font-size: 13.5px; color: var(--muted); }
+  .steps li { counter-increment: s; margin: 7px 0; padding-left: 26px; position: relative; }
+  .steps li::before {
+    content: counter(s); position: absolute; left: 0; top: 1px;
+    width: 18px; height: 18px; border-radius: 50%; background: var(--panel-2);
+    border: 1px solid var(--border); color: var(--text);
+    font-size: 11px; font-weight: 600; display: grid; place-items: center;
+  }
+  .steps { counter-reset: s; }
+  .spinner {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 2.5px solid var(--border); border-top-color: var(--accent);
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---- token reveal ---- */
+  .token-box { background: var(--panel-2); border: 1px solid var(--ok); border-radius: 8px; padding: 14px; margin-top: 8px; }
+  .token-box code { display: block; font-size: 13px; word-break: break-all; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  details { margin-top: 18px; font-size: 13px; }
+  summary { cursor: pointer; color: var(--muted); }
+  details[open] summary { margin-bottom: 10px; }
 </style>
 </head>
 <body>
@@ -113,131 +141,142 @@
     <span class="pill"><span class="dot" id="dot"></span><span id="connText">checking&hellip;</span></span>
   </header>
 
-  <div class="grid">
-    <div class="card span">
-      <h2>API key</h2>
-      <label for="key">Sent as <code>x-api-key</code> on every request<span class="hint"> &mdash; kept in this browser only (localStorage), never sent anywhere else</span></label>
-      <div class="row">
-        <input id="key" type="password" placeholder="paste your API_KEY" autocomplete="off" style="flex: 3 1 320px" />
-        <button class="ghost" id="saveKey" style="flex: 0 0 auto">Save</button>
-        <button class="ghost" id="revealKey" style="flex: 0 0 auto">Show</button>
-      </div>
-      <pre id="keyOut"></pre>
-    </div>
+  <!-- ============================ LINK SCREEN ============================ -->
+  <section id="linkScreen" hidden>
+    <div class="card link-hero">
+      <h3 id="linkTitle">Link your WhatsApp</h3>
+      <p id="linkBlurb">Scan the code with your phone, exactly like WhatsApp Web. Your API token is created automatically once it connects &mdash; nothing to copy by hand.</p>
 
+      <div id="qrHolder">
+        <button class="big" id="startPair">Link WhatsApp</button>
+      </div>
+
+      <ol class="steps">
+        <li>Open WhatsApp on your phone</li>
+        <li>Settings &rarr; <strong>Linked devices</strong></li>
+        <li>Tap <strong>Link a device</strong></li>
+        <li>Point it at the code above</li>
+      </ol>
+
+      <pre id="pairOut"></pre>
+
+      <details>
+        <summary>I already have a token</summary>
+        <div class="row" style="margin-top: 6px">
+          <input id="manualToken" type="password" placeholder="wa_… or your admin API key" autocomplete="off" style="flex: 3 1 260px" />
+          <button class="ghost" id="useManual" style="flex: 0 0 auto">Use it</button>
+        </div>
+        <p class="note">Useful for the admin key from <code>.env</code>, or a token you saved elsewhere.</p>
+      </details>
+    </div>
+  </section>
+
+  <!-- =========================== TOKEN REVEAL =========================== -->
+  <section id="tokenScreen" hidden>
     <div class="card">
-      <h2>Pairing</h2>
-      <div id="qrBox">
-        <p class="hint" id="qrMsg">Loading&hellip;</p>
+      <h2>Linked</h2>
+      <p style="margin-top:0">Connected as <strong id="tokenUser"></strong>. This browser is signed in and the token below is saved here already.</p>
+      <div class="token-box">
+        <code id="tokenValue"></code>
       </div>
       <div class="actions">
-        <button class="ghost" id="refreshQr">Refresh QR</button>
-        <button class="danger" id="logout">Log out</button>
+        <button id="copyToken">Copy token</button>
+        <button class="ghost" id="gotoConsole">Open console</button>
       </div>
-      <p class="note">WhatsApp &rarr; Settings &rarr; Linked devices &rarr; Link a device. The code rotates every ~20s; this panel refetches it automatically.</p>
-      <pre id="logoutOut"></pre>
+      <p class="note" id="tokenDelivery"></p>
+      <p class="note"><strong>This is the only time it is shown.</strong> It is stored hashed on the server, so it cannot be read back. Anyone holding it can send messages as you; <code>POST /logout</code> or <code>POST /tokens/revoke</code> kills it.</p>
     </div>
+  </section>
 
-    <div class="card">
-      <h2>Status</h2>
-      <div id="statusBox"></div>
-      <div class="actions"><button class="ghost" id="refreshStatus">Refresh</button></div>
-    </div>
-
-    <div class="card">
-      <h2>Send text</h2>
-      <label for="textTo">To <span class="hint">number in any format, or a group JID</span></label>
-      <input id="textTo" placeholder="+91 98765 43210" />
-      <label for="textBody">Message</label>
-      <textarea id="textBody" placeholder="Hello from the API"></textarea>
-      <div class="actions"><button id="sendText">Send</button></div>
-      <pre id="textOut"></pre>
-    </div>
-
-    <div class="card">
-      <h2>Send media</h2>
-      <label for="mediaTo">To</label>
-      <input id="mediaTo" placeholder="+91 98765 43210" />
-      <div class="row">
-        <div style="flex: 0 0 130px">
-          <label for="mediaType">Type</label>
-          <select id="mediaType">
-            <option value="image">image</option>
-            <option value="video">video</option>
-            <option value="document">document</option>
-          </select>
+  <!-- ============================== CONSOLE ============================== -->
+  <section id="console" hidden>
+    <div class="grid">
+      <div class="card">
+        <h2>Status</h2>
+        <div id="statusBox"></div>
+        <div class="actions">
+          <button class="ghost" id="refreshStatus">Refresh</button>
+          <button class="danger" id="logout">Unlink phone</button>
         </div>
-        <div style="flex: 2 1 200px">
-          <label for="mediaUrl">URL <span class="hint">http(s), reachable from the server</span></label>
-          <input id="mediaUrl" placeholder="https://example.com/photo.jpg" />
-        </div>
+        <pre id="logoutOut"></pre>
       </div>
-      <label for="mediaCaption">Caption <span class="hint">optional</span></label>
-      <input id="mediaCaption" placeholder="Site photo" />
-      <div class="actions"><button id="sendMedia">Send</button></div>
-      <pre id="mediaOut"></pre>
-    </div>
 
-    <div class="card">
-      <h2>Check a number</h2>
-      <label for="checkNum">Number <span class="hint">is it registered on WhatsApp?</span></label>
-      <input id="checkNum" placeholder="919876543210" />
-      <div class="actions"><button id="checkBtn">Check</button></div>
-      <pre id="checkOut"></pre>
-    </div>
-  </div>
+      <div class="card">
+        <h2>Send text</h2>
+        <label for="textTo">To <span class="hint">number in any format, or a group JID</span></label>
+        <input id="textTo" placeholder="+91 98765 43210" />
+        <label for="textBody">Message</label>
+        <textarea id="textBody" placeholder="Hello from the API"></textarea>
+        <div class="actions"><button id="sendText">Send</button></div>
+        <pre id="textOut"></pre>
+      </div>
 
-  <p class="note">
-    This console is served by the API itself, so it talks to the same origin &mdash; no CORS, no proxy.
-    Full endpoint reference and curl examples are in the project README.
-  </p>
+      <div class="card">
+        <h2>Send media</h2>
+        <label for="mediaTo">To</label>
+        <input id="mediaTo" placeholder="+91 98765 43210" />
+        <div class="row">
+          <div style="flex: 0 0 130px">
+            <label for="mediaType">Type</label>
+            <select id="mediaType">
+              <option value="image">image</option>
+              <option value="video">video</option>
+              <option value="document">document</option>
+            </select>
+          </div>
+          <div style="flex: 2 1 200px">
+            <label for="mediaUrl">URL <span class="hint">http(s), reachable from the server</span></label>
+            <input id="mediaUrl" placeholder="https://example.com/photo.jpg" />
+          </div>
+        </div>
+        <label for="mediaCaption">Caption <span class="hint">optional</span></label>
+        <input id="mediaCaption" placeholder="Site photo" />
+        <div class="actions"><button id="sendMedia">Send</button></div>
+        <pre id="mediaOut"></pre>
+      </div>
+
+      <div class="card">
+        <h2>Check a number</h2>
+        <label for="checkNum">Number <span class="hint">is it registered on WhatsApp?</span></label>
+        <input id="checkNum" placeholder="919876543210" />
+        <div class="actions"><button id="checkBtn">Check</button></div>
+        <pre id="checkOut"></pre>
+      </div>
+    </div>
+    <p class="note">Served by the API itself, so it talks to the same origin. Endpoint reference and curl examples are in the project README.</p>
+  </section>
 </div>
 
 <script>
 const $ = id => document.getElementById(id)
-const KEY_STORE = 'wa-api-key'
+const TOKEN_STORE = 'wa-device-token'
 
-// --- api key (localStorage may throw in private mode, so guard both ways) ----
-function loadKey() {
-  try { return localStorage.getItem(KEY_STORE) || '' } catch { return '' }
-}
-function storeKey(value) {
-  try { localStorage.setItem(KEY_STORE, value); return true } catch { return false }
-}
+let token = read()
+let claimId = null
+let pollTimer = null
+let connected = false
 
-$('key').value = loadKey()
-
-$('saveKey').onclick = () => {
-  const value = $('key').value.trim()
-  $('key').value = value
-  const saved = storeKey(value)
-  show('keyOut', saved
-    ? { saved: true, message: 'Key stored in this browser.' }
-    : { saved: false, message: 'Could not use localStorage; the key will only last for this page load.' }, saved)
-  refreshAll()
-}
-$('revealKey').onclick = () => {
-  const el = $('key')
-  const hidden = el.type === 'password'
-  el.type = hidden ? 'text' : 'password'
-  $('revealKey').textContent = hidden ? 'Hide' : 'Show'
-}
+// --- storage (throws in some private modes, so both sides are guarded) -------
+function read() { try { return localStorage.getItem(TOKEN_STORE) || '' } catch { return '' } }
+function write(v) { try { v ? localStorage.setItem(TOKEN_STORE, v) : localStorage.removeItem(TOKEN_STORE); return true } catch { return false } }
 
 // --- helpers ----------------------------------------------------------------
 function show(id, data, ok) {
   const el = $(id)
-  el.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
+  el.textContent = data == null ? '' : typeof data === 'string' ? data : JSON.stringify(data, null, 2)
   el.className = ok === undefined ? '' : ok ? 'ok' : 'bad'
 }
 
-/** Every call returns {ok, status, body} instead of throwing, so the UI can always render something. */
-async function api(path, options = {}) {
-  const key = $('key').value.trim()
-  if (!key) return { ok: false, status: 0, body: { error: 'no_api_key', message: 'Enter your API key above first.' } }
+/** Never throws: always resolves {ok, status, body} so the UI can render something. */
+async function req(path, options = {}) {
   try {
     const res = await fetch(path, {
       ...options,
-      headers: { 'x-api-key': key, ...(options.body ? { 'content-type': 'application/json' } : {}), ...(options.headers || {}) }
+      headers: {
+        ...(token ? { 'x-api-key': token } : {}),
+        ...(options.body ? { 'content-type': 'application/json' } : {}),
+        ...(options.headers || {})
+      }
     })
     let body
     try { body = await res.json() } catch { body = { error: 'bad_response', message: 'Response was not JSON.' } }
@@ -249,87 +288,157 @@ async function api(path, options = {}) {
 
 function busy(button, running) {
   button.disabled = running
-  if (running) {
-    button.dataset.label = button.textContent
-    button.textContent = 'Working…'
-  } else if (button.dataset.label) {
-    button.textContent = button.dataset.label
-  }
+  if (running) { button.dataset.label = button.textContent; button.textContent = 'Working…' }
+  else if (button.dataset.label) { button.textContent = button.dataset.label }
+}
+
+function screenTo(name) {
+  for (const id of ['linkScreen', 'tokenScreen', 'console']) $(id).hidden = id !== name
 }
 
 // --- connection banner ------------------------------------------------------
-let connected = false
-
 async function refreshHealth() {
-  // /health needs no key, so the banner works before one is entered.
   try {
     const res = await fetch('/health')
     const body = await res.json()
     connected = body.connected
-    const state = body.connected ? 'ok' : body.connection === 'connecting' ? 'warn' : 'bad'
-    $('dot').className = 'dot ' + state + (body.connected ? '' : ' live')
-    $('connText').textContent = body.connected
-      ? 'connected'
-      : body.connection + ' · not paired'
+    $('dot').className = 'dot ' + (body.connected ? 'ok' : body.connection === 'connecting' ? 'warn live' : 'bad live')
+    $('connText').textContent = body.connected ? 'linked' : body.connection + ' · not linked'
   } catch {
+    connected = false
     $('dot').className = 'dot bad'
     $('connText').textContent = 'server unreachable'
-    connected = false
   }
 }
 
-// --- status -----------------------------------------------------------------
-async function refreshStatus() {
-  const { ok, body } = await api('/status')
+// --- pairing ----------------------------------------------------------------
+$('startPair').onclick = async e => {
+  busy(e.target, true)
+  show('pairOut', null)
+  const { ok, body } = await req('/pair/start', { method: 'POST' })
+  busy(e.target, false)
+
   if (!ok) {
-    $('statusBox').innerHTML = ''
-    return show('statusBox', '')
+    // Already linked from another browser: mint a token instead of re-pairing.
+    if (body.error === 'conflict') return mintWithoutPairing()
+    return show('pairOut', body, false)
+  }
+  claimId = body.claimId
+  $('qrHolder').innerHTML = '<div class="spinner"></div><p class="hint">Waiting for a code…</p>'
+  poll()
+}
+
+async function mintWithoutPairing() {
+  const { ok, body } = await req('/pair/token', { method: 'POST' })
+  if (!ok) return show('pairOut', body, false)
+  adopt(body.token, body.user, null)
+}
+
+function poll() {
+  clearTimeout(pollTimer)
+  pollTimer = setTimeout(tick, 1200)
+}
+
+async function tick() {
+  if (!claimId) return
+  const { ok, body } = await req('/pair/status/' + encodeURIComponent(claimId))
+
+  if (!ok) { show('pairOut', body, false); return poll() }
+
+  if (body.state === 'expired') {
+    claimId = null
+    $('qrHolder').innerHTML = '<button class="big" id="startPair2">Start again</button>'
+    $('startPair2').onclick = () => location.reload()
+    return show('pairOut', 'That pairing attempt expired. Start again.', false)
+  }
+
+  if (body.state === 'paired') {
+    claimId = null
+    return adopt(body.token, body.user, body.tokenAlreadyCollected)
+  }
+
+  if (body.qr) {
+    const img = $('qrHolder').querySelector('img')
+    if (img) { img.src = body.qr }
+    else { $('qrHolder').innerHTML = '<img alt="WhatsApp pairing QR code" />'; $('qrHolder').querySelector('img').src = body.qr }
+  }
+  poll()
+}
+
+/** Take ownership of a freshly minted token and move on. */
+function adopt(fresh, user, alreadyCollected) {
+  refreshHealth()
+  if (!fresh) {
+    // Another tab collected it; that tab has the token, this one cannot.
+    return show('pairOut', alreadyCollected
+      ? 'Linked, but the token was already collected by another tab. Use that tab, or revoke and relink.'
+      : 'Linked, but no token came back.', false)
+  }
+  token = fresh
+  const stored = write(fresh)
+  $('tokenUser').textContent = user ? (user.name ? user.name + ' — ' + user.id : user.id) : 'your account'
+  $('tokenValue').textContent = fresh
+  $('tokenDelivery').textContent = stored
+    ? 'Also sent to your own WhatsApp chat, so it is on your phone too (turn that off with SEND_TOKEN_TO_PHONE=false).'
+    : 'This browser refused localStorage, so copy the token now — it will not survive a reload.'
+  screenTo('tokenScreen')
+}
+
+$('copyToken').onclick = async e => {
+  try { await navigator.clipboard.writeText($('tokenValue').textContent); e.target.textContent = 'Copied' }
+  catch { e.target.textContent = 'Copy failed — select it by hand' }
+}
+$('gotoConsole').onclick = () => { screenTo('console'); refreshAll() }
+
+$('useManual').onclick = async e => {
+  const value = $('manualToken').value.trim()
+  if (!value) return
+  busy(e.target, true)
+  const previous = token
+  token = value
+  const { ok, body } = await req('/status')
+  busy(e.target, false)
+  if (!ok) { token = previous; return show('pairOut', body, false) }
+  write(value)
+  screenTo('console')
+  refreshAll()
+}
+
+// --- console ----------------------------------------------------------------
+async function refreshStatus() {
+  const { ok, body } = await req('/status')
+  if (!ok) {
+    $('statusBox').textContent = ''
+    // A revoked or wrong token means this browser is signed out.
+    if (body.error === 'unauthorized') signOut()
+    return
   }
   const rows = [
-    ['session', body.session],
     ['connection', body.connection],
-    ['paired as', body.user ? (body.user.name ? body.user.name + ' — ' + body.user.id : body.user.id) : '—'],
+    ['linked as', body.user ? (body.user.name ? body.user.name + ' — ' + body.user.id : body.user.id) : '—'],
+    ['signed in as', body.authenticatedAs],
     ['queued sends', body.queued],
     ['webhook', body.webhookConfigured ? 'configured' : 'disabled'],
-    ['last disconnect', body.lastDisconnect ? (body.lastDisconnect.reason || body.lastDisconnect.statusCode) : 'none']
+    ['device tokens', (body.deviceTokens || []).length]
   ]
-  $('statusBox').innerHTML = rows
-    .map(([k, v]) => '<div class="stat"><span></span><span></span></div>')
-    .join('')
-  // Fill via textContent so a pushName from WhatsApp can never inject markup.
-  const cells = $('statusBox').querySelectorAll('.stat')
-  rows.forEach(([k, v], i) => {
-    cells[i].children[0].textContent = k
-    cells[i].children[1].textContent = String(v)
+  const box = $('statusBox')
+  box.innerHTML = rows.map(() => '<div class="stat"><span></span><span></span></div>').join('')
+  // textContent, so a pushName coming from WhatsApp can never inject markup.
+  box.querySelectorAll('.stat').forEach((cell, i) => {
+    cell.children[0].textContent = rows[i][0]
+    cell.children[1].textContent = String(rows[i][1])
   })
 }
 
-// --- qr ---------------------------------------------------------------------
-async function refreshQr() {
-  const box = $('qrBox')
-  if (connected) {
-    box.innerHTML = '<p class="hint">Paired — nothing to scan. Log out to pair a different phone.</p>'
-    return
-  }
-  const { ok, status, body } = await api('/qr')
-  if (ok && body.dataUrl) {
-    box.innerHTML = '<img alt="WhatsApp pairing QR code" />'
-    box.querySelector('img').src = body.dataUrl
-    return
-  }
-  const msg = status === 409
-    ? 'Already paired — nothing to scan.'
-    : status === 401
-      ? 'Enter your API key above to load the QR.'
-      : (body.message || 'No QR yet.')
-  box.innerHTML = '<p class="hint"></p>'
-  box.querySelector('p').textContent = msg
+function signOut() {
+  token = ''
+  write('')
+  screenTo('linkScreen')
 }
 
-// --- actions ----------------------------------------------------------------
 $('sendText').onclick = async e => {
   busy(e.target, true)
-  const { ok, body } = await api('/send/text', {
+  const { ok, body } = await req('/send/text', {
     method: 'POST',
     body: JSON.stringify({ to: $('textTo').value, message: $('textBody').value })
   })
@@ -344,7 +453,7 @@ $('sendMedia').onclick = async e => {
   const payload = { to: $('mediaTo').value, type: $('mediaType').value, url: $('mediaUrl').value }
   const caption = $('mediaCaption').value.trim()
   if (caption) payload.caption = caption
-  const { ok, body } = await api('/send/media', { method: 'POST', body: JSON.stringify(payload) })
+  const { ok, body } = await req('/send/media', { method: 'POST', body: JSON.stringify(payload) })
   show('mediaOut', body, ok)
   busy(e.target, false)
   refreshStatus()
@@ -352,34 +461,44 @@ $('sendMedia').onclick = async e => {
 
 $('checkBtn').onclick = async e => {
   busy(e.target, true)
-  const raw = $('checkNum').value.trim()
-  const { ok, body } = await api('/check/' + encodeURIComponent(raw))
+  const { ok, body } = await req('/check/' + encodeURIComponent($('checkNum').value.trim()))
   show('checkOut', body, ok)
   busy(e.target, false)
 }
 
 $('logout').onclick = async e => {
-  if (!confirm('Unlink this device and delete the local session? You will have to scan a new QR.')) return
+  if (!confirm('Unlink the phone, delete the session and revoke every device token?')) return
   busy(e.target, true)
-  const { ok, body } = await api('/logout', { method: 'POST' })
+  const { ok, body } = await req('/logout', { method: 'POST' })
   show('logoutOut', body, ok)
   busy(e.target, false)
-  refreshAll()
+  await refreshHealth()
+  if (ok) setTimeout(signOut, 1200)
 }
 
-$('refreshQr').onclick = () => refreshQr()
 $('refreshStatus').onclick = () => refreshStatus()
 
-// --- polling ----------------------------------------------------------------
+// --- boot -------------------------------------------------------------------
 async function refreshAll() {
   await refreshHealth()
-  await Promise.all([refreshStatus(), refreshQr()])
+  if (!$('console').hidden) await refreshStatus()
 }
 
-refreshAll()
-// The QR rotates every ~20s server-side; 5s keeps the panel close to live
-// without hammering the API.
-setInterval(refreshAll, 5000)
+async function boot() {
+  await refreshHealth()
+  if (!token) {
+    screenTo('linkScreen')
+  } else {
+    // Verify the stored token still works before showing the console.
+    const { ok, body } = await req('/status')
+    if (ok) { screenTo('console'); refreshStatus() }
+    else if (body.error === 'unauthorized') signOut()
+    else { screenTo('console'); refreshStatus() }
+  }
+  setInterval(refreshAll, 5000)
+}
+
+boot()
 </script>
 </body>
 </html>

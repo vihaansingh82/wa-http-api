@@ -2,6 +2,8 @@ import { config } from './src/config.js'
 import { logger } from './src/logger.js'
 import { createWhatsAppClient } from './src/whatsapp.js'
 import { createServer } from './src/server.js'
+import { createTokenStore } from './src/tokens.js'
+import { createPairingFlow } from './src/pairing.js'
 
 // A dropped WhatsApp socket or a dead webhook receiver must never take the
 // process down, so nothing is left to Node's default crash-on-rejection.
@@ -14,8 +16,23 @@ process.on('uncaughtException', err => {
   shutdown('uncaughtException', 1)
 })
 
-const client = createWhatsAppClient()
-const app = createServer(client)
+const tokens = createTokenStore(config.tokenStore)
+await tokens.load()
+
+// The client needs the pairing flow to react to 'open', and the flow needs the
+// client to read the QR and DM the token -- so the hook is wired in after both
+// exist, via a late-bound reference.
+let pairing
+const client = createWhatsAppClient({ onConnected: user => pairing?.onConnected(user) })
+
+pairing = createPairingFlow({
+  client,
+  tokens,
+  ttlMs: config.pairClaimTtlMs,
+  deliverToPhone: config.sendTokenToPhone
+})
+
+const app = createServer(client, { tokens, pairing })
 
 const server = app.listen(config.port, config.host, () => {
   logger.info(
