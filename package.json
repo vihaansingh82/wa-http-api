@@ -10,7 +10,8 @@
   },
   "scripts": {
     "start": "node index.js",
-    "dev": "node --watch index.js"
+    "dev": "node --watch index.js",
+    "test": "node test/run.mjs"
   },
   "dependencies": {
     "@cacheable/node-cache": "^3.1.1",

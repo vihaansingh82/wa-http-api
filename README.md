@@ -525,10 +525,36 @@ src/queue.js          serial send queue with a minimum delay
 src/webhook.js        webhook delivery with bounded retries
 src/messages.js       inbound filtering and payload extraction
 src/errors.js         ApiError -> HTTP status mapping
+test/                 five suites, run with npm test
 src/tokens.js         device tokens, hashed at rest, atomic serialised writes
 src/pairing.js        the Link WhatsApp claim flow
 public/index.html     the browser console (no build step, no secrets)
 ```
+
+## Tests
+
+```bash
+npm test
+```
+
+124 checks across five suites, no test framework and no network access
+required — everything runs against a stubbed Baileys client and local HTTP
+servers:
+
+| Suite | Covers |
+| --- | --- |
+| `test/http.test.mjs` | Every route: auth, validation rejections, status codes, error shape |
+| `test/messages.test.mjs` | Webhook retry/backoff behaviour, inbound filtering, payload extraction |
+| `test/pairing.test.mjs` | The link flow end to end: claim, QR, one-time token, revocation |
+| `test/tokens.test.mjs` | Token store under concurrency, hashing at rest, the loopback pairing gate |
+| `test/page.test.mjs` | Console page: script parses, every element id resolves, docs match the routes |
+
+Two of those are worth calling out: `page.test.mjs` fails if an endpoint exists
+in `server.js` but not in the in-page docs (or vice versa), so the reference
+cannot drift; and `tokens.test.mjs` fires 25 concurrent mints against a racing
+revoke, which is how the token-store write race was found.
+
+---
 
 ## Status codes
 

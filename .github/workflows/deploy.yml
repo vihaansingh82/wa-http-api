@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   check:
-    name: Syntax check
+    name: Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,11 +28,9 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci --omit=dev
-      - name: Check every source file parses
-        run: |
-          for f in index.js src/*.js; do node --check "$f"; done
-          echo "all files parse"
+      - run: npm ci
+      # Nothing reaches the deployed instance without the suites passing.
+      - run: npm test
 
   deploy:
     name: Fly.io
