@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Sandesh">
+  <title>Sandesh</title>
+  <!-- Solid green badge rather than a bare glyph: it stays legible as a 16px
+       favicon on both a light and a dark browser chrome, which an outline mark
+       does not. -->
+  <rect width="32" height="32" rx="7.5" fill="#1f7a45"/>
+  <!-- Paper plane, in two tones so the fold reads at small sizes. -->
+  <path d="M26 6 6 14.6l8.4 3z" fill="#fff"/>
+  <path d="M26 6 14.4 17.6l2.2 8.4z" fill="#fff" fill-opacity=".68"/>
+</svg>

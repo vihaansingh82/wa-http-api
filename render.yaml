@@ -8,7 +8,7 @@
 
 services:
   - type: web
-    name: wa-http-api
+    name: sandesh-api
     runtime: node
     # Cheapest paid plan (0.5 CPU / 512 MB). If you see the instance restarting
     # under memory pressure, move up to 1c-2g -- an OOM loop reconnects to
@@ -27,7 +27,7 @@ services:
     healthCheckPath: /health
 
     disk:
-      name: wa-data
+      name: sandesh-data
       mountPath: /var/data
       sizeGB: 1
 

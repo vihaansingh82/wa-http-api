@@ -11,7 +11,7 @@ export function createWebhookSender({ url, secret, timeoutMs, maxAttempts, logge
   const enabled = Boolean(url)
 
   async function attempt(payload, attemptNo) {
-    const headers = { 'content-type': 'application/json', 'user-agent': 'wa-http-api/1.0' }
+    const headers = { 'content-type': 'application/json', 'user-agent': 'sandesh/1.0' }
     if (secret) headers['x-webhook-secret'] = secret
 
     const res = await fetch(url, {

@@ -1,8 +1,8 @@
 {
-  "name": "wa-http-api",
+  "name": "sandesh-api",
   "version": "1.0.0",
   "private": true,
-  "description": "Self-hosted WhatsApp HTTP API built on Baileys v7 and Express",
+  "description": "Sandesh - self-hosted, multi-tenant WhatsApp API built on Baileys v7 and Express",
   "type": "module",
   "main": "index.js",
   "engines": {

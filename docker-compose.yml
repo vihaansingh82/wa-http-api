@@ -1,5 +1,5 @@
 services:
-  wa-http-api:
+  sandesh:
     build: .
     restart: unless-stopped
     # Reaps zombies and forwards SIGTERM so shutdown stays graceful.

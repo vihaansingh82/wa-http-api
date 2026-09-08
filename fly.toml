@@ -2,14 +2,14 @@
 # the GitHub Action do it on every push to main).
 #
 #   fly launch --no-deploy --copy-config --name <your-app-name>
-#   fly volumes create wa_data --size 1 --region <your-region>
+#   fly volumes create sandesh_data --size 1 --region <your-region>
 #   fly secrets set SUPABASE_URL=... SUPABASE_PUBLISHABLE_KEY=... \
 #                   SUPABASE_SERVICE_ROLE_KEY=... PUBLIC_URL=https://<app>.fly.dev
 #   fly deploy
 #
 # Change `app` to something unique before the first deploy.
 
-app = "wa-http-api"
+app = "sandesh-api"
 primary_region = "sin"
 
 [build]
@@ -48,7 +48,7 @@ primary_region = "sin"
     path = "/health"
 
 [mounts]
-  source = "wa_data"
+  source = "sandesh_data"
   destination = "/data"
 
 [[vm]]
