@@ -1,0 +1,1311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>API Reference · WhatsApp HTTP API</title>
+<link rel="stylesheet" href="/shared.css" />
+<style>
+  /* ---- docs shell ---------------------------------------------------- */
+  .docs {
+    display: grid;
+    grid-template-columns: 268px minmax(0, 1fr);
+    gap: 28px;
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 0 18px 80px;
+    align-items: start;
+  }
+  header.docs-top {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 22px;
+  }
+  header.docs-top .inner {
+    max-width: 1240px; margin: 0 auto; padding: 12px 18px;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  }
+  header.docs-top h1 { font-size: 16px; }
+  header.docs-top .spacer { flex: 1 1 auto; }
+  header.docs-top a.top-link {
+    font-size: 13px; font-weight: 500; text-decoration: none;
+    padding: 6px 11px; border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); background: var(--panel);
+  }
+  header.docs-top a.top-link:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ---- sidebar ------------------------------------------------------- */
+  aside.side {
+    position: sticky; top: 62px;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+    padding-right: 6px;
+  }
+  aside.side .filter { margin-bottom: 12px; }
+  aside.side .group-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); font-weight: 700; margin: 16px 0 5px;
+  }
+  aside.side .group-label:first-of-type { margin-top: 4px; }
+  aside.side a {
+    display: flex; align-items: center; gap: 7px;
+    padding: 4px 7px; border-radius: 6px; text-decoration: none;
+    color: var(--text); font-size: 12.5px; line-height: 1.35;
+  }
+  aside.side a:hover { background: var(--panel-2); }
+  aside.side a.active { background: var(--panel); box-shadow: inset 2px 0 0 var(--accent); }
+  aside.side a .m { flex: none; }
+  aside.side a .p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; }
+  .side-empty { font-size: 12.5px; color: var(--muted); padding: 10px 7px; }
+
+  /* ---- method badges ------------------------------------------------- */
+  .m {
+    display: inline-block; min-width: 52px; text-align: center;
+    font-size: 10px; font-weight: 800; letter-spacing: 0.05em;
+    padding: 3px 6px; border-radius: 5px; border: 1px solid;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+  }
+  .m.get    { color: var(--info); border-color: color-mix(in srgb, var(--info) 45%, var(--border)); background: color-mix(in srgb, var(--info) 10%, transparent); }
+  .m.post   { color: var(--ok);   border-color: color-mix(in srgb, var(--ok) 45%, var(--border));   background: color-mix(in srgb, var(--ok) 10%, transparent); }
+  .m.patch  { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--border)); background: color-mix(in srgb, var(--warn) 10%, transparent); }
+  .m.delete { color: var(--bad);  border-color: color-mix(in srgb, var(--bad) 45%, var(--border));  background: color-mix(in srgb, var(--bad) 10%, transparent); }
+
+  /* ---- endpoints ----------------------------------------------------- */
+  section.grp { margin-bottom: 34px; scroll-margin-top: 72px; }
+  section.grp > h2.grp-title {
+    font-size: 17px; text-transform: none; letter-spacing: -0.01em;
+    color: var(--text); margin: 0 0 4px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  section.grp > p.grp-note { font-size: 13.5px; color: var(--muted); margin: 8px 0 14px; }
+
+  details.ep {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); margin-bottom: 8px; scroll-margin-top: 72px;
+  }
+  details.ep[open] { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+  details.ep > summary {
+    display: flex; align-items: center; gap: 11px; flex-wrap: wrap;
+    padding: 11px 14px; cursor: pointer; list-style: none;
+  }
+  details.ep > summary::-webkit-details-marker { display: none; }
+  details.ep > summary:hover { background: var(--panel-2); border-radius: var(--radius); }
+  details.ep[open] > summary { border-bottom: 1px solid var(--border); border-radius: var(--radius) var(--radius) 0 0; }
+  details.ep summary .path {
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 13px; font-weight: 600; word-break: break-all;
+  }
+  details.ep summary .path .var { color: var(--accent); }
+  details.ep summary .desc { flex: 1 1 240px; font-size: 13px; color: var(--muted); }
+  .ep-body { padding: 14px; }
+  .ep-body h4 {
+    font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--muted); margin: 18px 0 7px; font-weight: 700;
+  }
+  .ep-body h4:first-child { margin-top: 0; }
+  .ep-body p { font-size: 13.5px; }
+  .ep-body table { font-size: 13px; }
+  .ep-body td.mono { white-space: nowrap; }
+  .req { color: var(--bad); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+  .opt { color: var(--muted); font-size: 11px; }
+
+  /* ---- code blocks with copy ---------------------------------------- */
+  .code { position: relative; }
+  .code pre { max-height: 420px; padding-right: 56px; }
+  .code button.copy {
+    position: absolute; top: 7px; right: 7px;
+    padding: 3px 8px; font-size: 11px; font-weight: 500;
+    background: var(--panel); color: var(--muted); border: 1px solid var(--border);
+  }
+  .code button.copy:hover { color: var(--text); border-color: var(--accent); }
+
+  /* ---- misc ---------------------------------------------------------- */
+  .callout {
+    border-left: 3px solid var(--accent); background: var(--panel-2);
+    border-radius: 0 8px 8px 0; padding: 11px 14px; margin: 14px 0; font-size: 13.5px;
+  }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.bad  { border-left-color: var(--bad); }
+  .callout strong { display: block; margin-bottom: 3px; }
+  .baseurl {
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px;
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 9px 12px; word-break: break-all; display: block;
+  }
+  .auth-badge {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted);
+  }
+  .auth-badge.pub    { color: var(--ok);   border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); }
+  .auth-badge.key    { color: var(--info); border-color: color-mix(in srgb, var(--info) 45%, var(--border)); }
+  .auth-badge.admin  { color: var(--bad);  border-color: color-mix(in srgb, var(--bad) 45%, var(--border)); }
+
+  @media (max-width: 900px) {
+    .docs { grid-template-columns: 1fr; gap: 0; }
+    aside.side { position: static; max-height: none; margin-bottom: 24px; }
+    aside.side .nav-list { max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="docs-top">
+  <div class="inner">
+    <h1>API Reference<span class="sub">WhatsApp HTTP API</span></h1>
+    <span class="spacer"></span>
+    <span class="pill" id="serverPill"><span class="dot" id="serverDot"></span><span id="serverText">checking…</span></span>
+    <a class="top-link" href="/app/">Dashboard</a>
+    <a class="top-link" href="/admin/">Admin</a>
+  </div>
+</header>
+
+<div class="docs">
+
+  <!-- ================= SIDEBAR ================= -->
+  <aside class="side">
+    <div class="filter">
+      <input id="filter" type="search" placeholder="Filter endpoints…" autocomplete="off" aria-label="Filter endpoints" />
+    </div>
+    <div class="nav-list" id="nav"></div>
+  </aside>
+
+  <!-- ================= MAIN ================= -->
+  <main>
+
+    <!-- ---------- overview ---------- -->
+    <section class="grp" id="overview" data-group="Getting started">
+      <h2 class="grp-title">Getting started</h2>
+      <p class="grp-note">
+        A self-hosted WhatsApp bridge. Link a phone by scanning a QR, then send and
+        receive messages over plain HTTP. Every account is a separate tenant with its
+        own WhatsApp connection, its own contacts and its own API keys — no tenant can
+        see another's data.
+      </p>
+
+      <h4>Base URL</h4>
+      <code class="baseurl" id="baseUrl">…</code>
+      <p class="note">
+        Every path below is relative to this origin. The examples on this page are
+        rewritten to use it, so you can copy them as-is.
+      </p>
+
+      <div class="callout">
+        <strong>Two credentials, one API</strong>
+        Dashboard sessions send a Supabase access token; scripts and integrations send
+        a long-lived API key. Both resolve to the same account, and every endpoint
+        accepts either — except the admin routes, which require a real login.
+      </div>
+
+      <h4>Quick start</h4>
+      <div class="code"><pre id="quickstart">…</pre></div>
+    </section>
+
+    <!-- ---------- auth ---------- -->
+    <section class="grp" id="auth" data-group="Authentication">
+      <h2 class="grp-title">Authentication</h2>
+      <p class="grp-note">
+        Send exactly one credential. If <code>x-api-key</code> is present it is used;
+        otherwise the <code>Authorization</code> header is read.
+      </p>
+
+      <h4>Option 1 — API key <span class="auth-badge key">x-api-key</span></h4>
+      <p>
+        Mint one in the dashboard or with <code>POST /api/keys</code>. The plaintext is
+        shown exactly once and stored only as a SHA-256 hash, so a database leak does
+        not expose usable keys. Keys start with <code>wak_</code>.
+      </p>
+      <div class="code"><pre id="authKeyEx">…</pre></div>
+
+      <h4>Option 2 — session token <span class="auth-badge">Bearer</span></h4>
+      <p>
+        What the dashboards use. Sign in against Supabase in the browser, then send the
+        resulting access token. Fetch the project URL and publishable key from
+        <code>GET /api/public-config</code> — never hardcode them.
+      </p>
+      <div class="code"><pre id="authBearerEx">…</pre></div>
+
+      <div class="callout bad">
+        <strong>Admin routes reject API keys</strong>
+        <code>/api/admin/*</code> requires <code>authKind: "session"</code> and the
+        <code>admin</code> role. A leaked client key must not be able to suspend
+        accounts or delete other tenants, so it is refused with <code>403</code>.
+      </div>
+    </section>
+
+    <!-- ---------- recipients ---------- -->
+    <section class="grp" id="recipients" data-group="Recipient format">
+      <h2 class="grp-title">Recipient format</h2>
+      <p class="grp-note">
+        The <code>to</code> field accepts loosely formatted numbers and normalises them.
+        Punctuation and spaces are stripped; a leading <code>00</code> dialling prefix is
+        removed.
+      </p>
+      <div class="scroll-x">
+        <table>
+          <thead><tr><th>You send</th><th>Becomes</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">"+91 98765 43210"</td><td class="mono">919876543210@s.whatsapp.net</td><td>Punctuation stripped</td></tr>
+            <tr><td class="mono">"919876543210"</td><td class="mono">919876543210@s.whatsapp.net</td><td>Plain digits</td></tr>
+            <tr><td class="mono">"0091987…"</td><td class="mono">919876543210@s.whatsapp.net</td><td>Leading <code>00</code> removed</td></tr>
+            <tr><td class="mono">"…@c.us"</td><td class="mono">…@s.whatsapp.net</td><td>Legacy server normalised</td></tr>
+            <tr><td class="mono">"…@lid"</td><td class="mono">unchanged</td><td>Already a server identifier</td></tr>
+            <tr><td class="mono">"1234-5678@g.us"</td><td class="mono">unchanged</td><td>Group JIDs are never rewritten</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">
+        <strong>Include the country code</strong>
+        A national number without it produces a syntactically valid JID that belongs to
+        nobody — WhatsApp accepts the message and silently drops it. With
+        <code>VERIFY_RECIPIENT</code> on (the default) every recipient is resolved
+        through WhatsApp first, and an unreachable number is refused with
+        <code>404 recipient_not_found</code> instead of failing silently. Must be
+        7–15 digits.
+      </div>
+    </section>
+
+    <!-- ---------- public ---------- -->
+    <section class="grp" id="public" data-group="Public">
+      <h2 class="grp-title">Public</h2>
+      <p class="grp-note">No credential required. Safe to call from anywhere.</p>
+
+      <details class="ep" data-method="GET" data-path="/health" id="ep-health">
+        <summary>
+          <span class="m get">GET</span>
+          <span class="path">/health</span>
+          <span class="desc">Liveness, and whether the server is usable</span>
+          <span class="auth-badge pub">public</span>
+        </summary>
+        <div class="ep-body">
+          <p>Used by the platform healthcheck. Reveals only liveness, whether Supabase is
+             configured, and a live-session count — no account data.</p>
+          <h4>Response 200</h4>
+          <div class="code"><pre>{
+  "status": "ok",
+  "supabase": true,
+  "liveSessions": 1,
+  "uptimeSeconds": 3421
+}</pre></div>
+          <div class="callout warn">
+            <strong>If <code>supabase</code> is false</strong>
+            The server is running but nobody can sign in. The three
+            <code>SUPABASE_*</code> variables are missing or the process was started
+            before they were set — restart it.
+          </div>
+        </div>
+      </details>
+
+      <details class="ep" data-method="GET" data-path="/api/public-config" id="ep-public-config">
+        <summary>
+          <span class="m get">GET</span>
+          <span class="path">/api/public-config</span>
+          <span class="desc">Supabase project URL and publishable key</span>
+          <span class="auth-badge pub">public</span>
+        </summary>
+        <div class="ep-body">
+          <p>What the dashboards need to sign in. Both values are designed to be public:
+             the publishable key grants nothing on its own, because row-level security
+             decides what a token can reach. The service-role key is never included.</p>
+          <h4>Response 200</h4>
+          <div class="code"><pre>{
+  "supabaseUrl": "https://your-project.supabase.co",
+  "supabaseKey": "sb_publishable_…",
+  "publicUrl": "https://your-app.example.com",
+  "configured": true
+}</pre></div>
+        </div>
+      </details>
+    </section>
+
+    <!-- ---------- account ---------- -->
+    <section class="grp" id="account" data-group="Account">
+      <h2 class="grp-title">Account</h2>
+      <p class="grp-note">Your own profile. Always scoped to the credential you sent.</p>
+
+      <details class="ep" data-method="GET" data-path="/api/me" id="ep-me-get">
+        <summary>
+          <span class="m get">GET</span>
+          <span class="path">/api/me</span>
+          <span class="desc">Who am I, and how did I authenticate</span>
+        </summary>
+        <div class="ep-body">
+          <p>The cheapest way to verify a credential works.</p>
+          <h4>Response 200</h4>
+          <div class="code"><pre>{
+  "id": "2dec89c5-92f9-4a25-84d8-e6bfd3410313",
+  "email": "you@example.com",
+  "fullName": "Your Name",
+  "company": null,
+  "role": "admin",
+  "status": "active",
+  "createdAt": "2026-09-08T10:18:02.113Z",
+  "authKind": "session"
+}</pre></div>
+          <p class="note"><code>authKind</code> is <code>"session"</code> or <code>"api_key"</code>.
+             <code>role</code> is <code>"admin"</code> or <code>"client"</code>.</p>
+        </div>
+      </details>
+
+      <details class="ep" data-method="PATCH" data-path="/api/me" id="ep-me-patch">
+        <summary>
+          <span class="m patch">PATCH</span>
+          <span class="path">/api/me</span>
+          <span class="desc">Update your own name or company</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Body</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Field</th><th>Type</th><th></th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">fullName</td><td class="mono">string</td><td><span class="opt">optional</span></td><td>Max 120 chars</td></tr>
+              <tr><td class="mono">company</td><td class="mono">string</td><td><span class="opt">optional</span></td><td>Max 120 chars</td></tr>
+            </tbody>
+          </table></div>
+          <div class="callout bad">
+            <strong><code>role</code> and <code>status</code> are not accepted here</strong>
+            Changing your own role is privilege escalation. The route ignores them and a
+            database trigger rejects the attempt even if it got through.
+          </div>
+          <h4>Response 200</h4>
+          <p>The updated profile row.</p>
+        </div>
+      </details>
+    </section>
+
+    <!-- ---------- session ---------- -->
+    <section class="grp" id="session" data-group="WhatsApp session">
+      <h2 class="grp-title">WhatsApp session</h2>
+      <p class="grp-note">
+        Linking and unlinking the phone behind your account. One connection per account.
+      </p>
+
+      <div class="callout">
+        <strong>State machine</strong>
+        <code>idle</code> → <code>connecting</code> → <code>awaiting_scan</code> →
+        <code>connected</code>. Also <code>logged_out</code> (credentials wiped, a fresh
+        QR is coming) and <code>error</code> (disconnected, reconnecting with backoff).
+      </div>
+
+      <details class="ep" data-method="GET" data-path="/api/session" id="ep-session">
+        <summary>
+          <span class="m get">GET</span>
+          <span class="path">/api/session</span>
+          <span class="desc">Current connection state</span>
+        </summary>
+        <div class="ep-body">
+          <p>Never starts a connection. When no socket is running it answers from the
+             stored row, with <code>live: false</code> — that is how you tell "offline
+             right now" from "never linked".</p>
+          <h4>Response 200</h4>
+          <div class="code"><pre>{
+  "state": "connected",
+  "connected": true,
+  "user": { "id": "919876543210:12@s.whatsapp.net", "name": "Your Name" },
+  "hasQr": false,
+  "queued": 0,
+  "live": true
+}</pre></div>
+        </div>
+      </details>
+
+      <details class="ep" data-method="POST" data-path="/api/session/start" id="ep-session-start">
+        <summary>
+          <span class="m post">POST</span>
+          <span class="path">/api/session/start</span>
+          <span class="desc">Bring the connection up</span>
+        </summary>
+        <div class="ep-body">
+          <p>Idempotent — returns the existing connection if one is already running.
+             Responds <code>202</code> immediately; the socket finishes connecting in the
+             background, so poll <code>GET /api/session</code> afterwards.</p>
+          <h4>Response 202</h4>
+          <div class="code"><pre>{ "state": "connecting", "connected": false, "starting": true, "queued": 0 }</pre></div>
+          <p class="note">Returns <code>503</code> when the server is already at
+             <code>MAX_TENANT_SESSIONS</code> and no idle socket can be evicted.</p>
+        </div>
+      </details>
+
+      <details class="ep" data-method="GET" data-path="/api/session/qr" id="ep-session-qr">
+        <summary>
+          <span class="m get">GET</span>
+          <span class="path">/api/session/qr</span>
+          <span class="desc">Pairing QR as a PNG data URL</span>
+        </summary>
+        <div class="ep-body">
+          <p>Starts the connection on demand, so this is the only call needed to link a
+             phone. Scan it in WhatsApp under <em>Linked devices</em>.</p>
+          <h4>Response 200</h4>
+          <div class="code"><pre>{
+  "qr": "2@abc…",
+  "dataUrl": "data:image/png;base64,iVBORw0KGgo…",
+  "generatedAt": "2026-09-08T10:23:23.574Z"
+}</pre></div>
+          <h4>Errors</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Status</th><th>Code</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">409</td><td class="mono">conflict</td><td>Already linked. Log out first to link a different phone</td></tr>
+              <tr><td class="mono">503</td><td class="mono">service_unavailable</td><td>No QR yet — retry in a few seconds</td></tr>
+            </tbody>
+          </table></div>
+          <div class="callout warn">
+            <strong>The QR rotates roughly every 20 seconds</strong>
+            Re-fetch on a timer and render the newest one. Scanning a stale code fails.
+          </div>
+        </div>
+      </details>
+
+      <details class="ep" data-method="POST" data-path="/api/session/logout" id="ep-session-logout">
+        <summary>
+          <span class="m post">POST</span>
+          <span class="path">/api/session/logout</span>
+          <span class="desc">Unlink the phone and wipe credentials</span>
+        </summary>
+        <div class="ep-body">
+          <div class="callout bad">
+            <strong>Destructive</strong>
+            Deletes this account's stored WhatsApp credentials. The phone must scan a new
+            QR to come back. Contacts and message history in the database are untouched.
+          </div>
+          <h4>Response 200</h4>
+          <div class="code"><pre>{ "loggedOut": true }</pre></div>
+        </div>
+      </details>
+    </section>
+
+    <!-- ---------- keys ---------- -->
+    <section class="grp" id="keys" data-group="API keys">
+      <h2 class="grp-title">API keys</h2>
+      <p class="grp-note">Long-lived credentials for your own scripts. Stored hashed.</p>
+
+      <details class="ep" data-method="GET" data-path="/api/keys" id="ep-keys-list">
+        <summary>
+          <span class="m get">GET</span>
+          <span class="path">/api/keys</span>
+          <span class="desc">List your keys, newest first</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Response 200</h4>
+          <div class="code"><pre>[
+  {
+    "id": "8f2c…",
+    "name": "production",
+    "key_prefix": "wak_Ab12Cd34",
+    "created_at": "2026-09-08T10:30:00.000Z",
+    "last_used_at": "2026-09-08T11:02:14.881Z",
+    "revoked_at": null
+  }
+]</pre></div>
+          <p class="note">Only the prefix is returned — the full key is unrecoverable by design.</p>
+        </div>
+      </details>
+
+      <details class="ep" data-method="POST" data-path="/api/keys" id="ep-keys-create">
+        <summary>
+          <span class="m post">POST</span>
+          <span class="path">/api/keys</span>
+          <span class="desc">Mint a key — plaintext returned once</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Body</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Field</th><th>Type</th><th></th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">name</td><td class="mono">string</td><td><span class="opt">optional</span></td><td>Max 60 chars, defaults to <code>"default"</code></td></tr>
+            </tbody>
+          </table></div>
+          <h4>Response 201</h4>
+          <div class="code"><pre>{
+  "id": "8f2c…",
+  "name": "production",
+  "key_prefix": "wak_Ab12Cd34",
+  "key": "wak_Ab12Cd34EfGh…",
+  "created_at": "2026-09-08T10:30:00.000Z"
+}</pre></div>
+          <div class="callout bad">
+            <strong><code>key</code> appears in this response and never again</strong>
+            Only its SHA-256 hash is stored. Lose it and you mint a new one.
+          </div>
+        </div>
+      </details>
+
+      <details class="ep" data-method="DELETE" data-path="/api/keys/{id}" id="ep-keys-revoke">
+        <summary>
+          <span class="m delete">DELETE</span>
+          <span class="path">/api/keys/<span class="var">{id}</span></span>
+          <span class="desc">Revoke a key immediately</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Response 200</h4>
+          <div class="code"><pre>{ "revoked": true, "id": "8f2c…" }</pre></div>
+          <p class="note">Returns <code>404</code> if the key does not exist, is not yours,
+             or was already revoked. Revocation can take up to 30s to take effect on a
+             server that has the key cached.</p>
+        </div>
+      </details>
+    </section>
+
+    <!-- ---------- sending ---------- -->
+    <section class="grp" id="sending" data-group="Sending">
+      <h2 class="grp-title">Sending</h2>
+      <p class="grp-note">
+        Requires a linked, connected session. Sends are queued and throttled per account.
+      </p>
+
+      <div class="callout warn">
+        <strong>Throttled on purpose</strong>
+        Every send passes through a serial FIFO queue with a minimum gap of
+        <code>SEND_DELAY_MS</code> (default <strong>3000 ms</strong>) between two of your
+        messages. WhatsApp bans accounts that fire messages back to back. A
+        <code>202</code> means accepted and queued, not delivered. Past
+        <code>MAX_QUEUE_SIZE</code> (default 500) you get <code>503</code>.
+      </div>
+
+      <details class="ep" data-method="POST" data-path="/api/send/text" id="ep-send-text">
+        <summary>
+          <span class="m post">POST</span>
+          <span class="path">/api/send/text</span>
+          <span class="desc">Send a text message</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Body</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Field</th><th>Type</th><th></th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">to</td><td class="mono">string</td><td><span class="req">required</span></td><td>Number or JID — see <a href="#recipients">Recipient format</a></td></tr>
+              <tr><td class="mono">message</td><td class="mono">string</td><td><span class="req">required</span></td><td>Max 65536 chars, must not be blank</td></tr>
+            </tbody>
+          </table></div>
+          <h4>Request</h4>
+          <div class="code"><pre class="sample" data-sample="send-text">…</pre></div>
+          <h4>Response 202</h4>
+          <div class="code"><pre>{
+  "sent": true,
+  "isGroup": false,
+  "id": "3EB0F3C7A1B2C3D4E5",
+  "to": "919876543210@s.whatsapp.net",
+  "timestamp": 1788862001
+}</pre></div>
+          <p class="note">
+            When WhatsApp resolves your recipient to a different JID than you asked for,
+            the response also carries <code>"requested"</code> and
+            <code>"resolved": true</code> — almost always a missing country code that
+            got fixed for you.
+          </p>
+          <h4>Errors</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Status</th><th>Code</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">400</td><td class="mono">bad_request</td><td>Bad <code>to</code> or missing <code>message</code></td></tr>
+              <tr><td class="mono">403</td><td class="mono">forbidden</td><td>That contact has opted out</td></tr>
+              <tr><td class="mono">404</td><td class="mono">recipient_not_found</td><td>Number is not reachable on WhatsApp</td></tr>
+              <tr><td class="mono">503</td><td class="mono">service_unavailable</td><td>Not linked, disconnected, or queue full</td></tr>
+            </tbody>
+          </table></div>
+        </div>
+      </details>
+
+      <details class="ep" data-method="POST" data-path="/api/send/media" id="ep-send-media">
+        <summary>
+          <span class="m post">POST</span>
+          <span class="path">/api/send/media</span>
+          <span class="desc">Send an image, video or document by URL</span>
+        </summary>
+        <div class="ep-body">
+          <p>The server fetches the URL and uploads it to WhatsApp. There is no file-upload
+             endpoint — host the file somewhere reachable and pass its URL.</p>
+          <h4>Body</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Field</th><th>Type</th><th></th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">to</td><td class="mono">string</td><td><span class="req">required</span></td><td>Number or JID</td></tr>
+              <tr><td class="mono">type</td><td class="mono">enum</td><td><span class="req">required</span></td><td><code>image</code> · <code>video</code> · <code>document</code></td></tr>
+              <tr><td class="mono">url</td><td class="mono">string</td><td><span class="req">required</span></td><td>Absolute <code>http</code>/<code>https</code>, max 2048 chars</td></tr>
+              <tr><td class="mono">caption</td><td class="mono">string</td><td><span class="opt">optional</span></td><td>Max 4096 chars</td></tr>
+              <tr><td class="mono">mimetype</td><td class="mono">string</td><td><span class="opt">optional</span></td><td>Derived from the URL extension when omitted</td></tr>
+              <tr><td class="mono">fileName</td><td class="mono">string</td><td><span class="opt">optional</span></td><td>Documents only; taken from the URL when omitted</td></tr>
+            </tbody>
+          </table></div>
+          <div class="callout bad">
+            <strong>Only http and https are accepted</strong>
+            <code>file://</code> and friends are rejected with <code>400</code> — they
+            would let a caller read the server's own filesystem.
+          </div>
+          <h4>Request</h4>
+          <div class="code"><pre class="sample" data-sample="send-media">…</pre></div>
+          <h4>Response 202</h4>
+          <div class="code"><pre>{
+  "sent": true,
+  "type": "image",
+  "isGroup": false,
+  "id": "3EB0F3C7A1B2C3D4E5",
+  "to": "919876543210@s.whatsapp.net",
+  "timestamp": 1788862001
+}</pre></div>
+        </div>
+      </details>
+
+      <details class="ep" data-method="GET" data-path="/api/check/{number}" id="ep-check">
+        <summary>
+          <span class="m get">GET</span>
+          <span class="path">/api/check/<span class="var">{number}</span></span>
+          <span class="desc">Is this number on WhatsApp?</span>
+        </summary>
+        <div class="ep-body">
+          <p>Asks WhatsApp directly and returns the real JID. Useful for validating a list
+             before a bulk send. Group JIDs are rejected with <code>400</code>.</p>
+          <h4>Request</h4>
+          <div class="code"><pre class="sample" data-sample="check">…</pre></div>
+          <h4>Response 200</h4>
+          <div class="code"><pre>{
+  "number": "919876543210",
+  "exists": true,
+  "jid": "919876543210@s.whatsapp.net"
+}</pre></div>
+        </div>
+      </details>
+    </section>
+
+    <!-- ---------- inbox ---------- -->
+    <section class="grp" id="inbox" data-group="Inbox">
+      <h2 class="grp-title">Inbox</h2>
+      <p class="grp-note">
+        Inbound messages are stored automatically for every linked account, whether or
+        not a webhook is configured.
+      </p>
+
+      <details class="ep" data-method="GET" data-path="/api/inbox/threads" id="ep-threads">
+        <summary>
+          <span class="m get">GET</span>
+          <span class="path">/api/inbox/threads</span>
+          <span class="desc">Conversations, most recent first</span>
+        </summary>
+        <div class="ep-body">
+          <p>Up to 100 contact rows ordered by <code>last_message_at</code>.</p>
+          <h4>Response 200</h4>
+          <div class="code"><pre>[
+  {
+    "id": "c1a2…",
+    "jid": "919876543210@s.whatsapp.net",
+    "number": "919876543210",
+    "name": "Asha",
+    "is_group": false,
+    "unread": 2,
+    "last_message_at": "2026-09-08T11:14:07.000Z",
+    "status": "new",
+    "tags": ["lead"],
+    "opted_out": false
+  }
+]</pre></div>
+        </div>
+      </details>
+
+      <details class="ep" data-method="GET" data-path="/api/inbox/threads/{jid}" id="ep-thread">
+        <summary>
+          <span class="m get">GET</span>
+          <span class="path">/api/inbox/threads/<span class="var">{jid}</span></span>
+          <span class="desc">Messages in one conversation</span>
+        </summary>
+        <div class="ep-body">
+          <p>Up to 200 messages in chronological order (oldest first), ready to render.
+             URL-encode the JID — it contains an <code>@</code>.</p>
+          <h4>Response 200</h4>
+          <div class="code"><pre>[
+  {
+    "wa_id": "3EB0F3C7A1B2C3D4E5",
+    "jid": "919876543210@s.whatsapp.net",
+    "direction": "in",
+    "type": "conversation",
+    "body": "Hi, is this still available?",
+    "push_name": "Asha",
+    "sent_at": "2026-09-08T11:14:07.000Z",
+    "status": "received"
+  }
+]</pre></div>
+          <p class="note"><code>direction</code> is <code>"in"</code> or <code>"out"</code>.</p>
+        </div>
+      </details>
+
+      <details class="ep" data-method="POST" data-path="/api/inbox/threads/{jid}/read" id="ep-thread-read">
+        <summary>
+          <span class="m post">POST</span>
+          <span class="path">/api/inbox/threads/<span class="var">{jid}</span>/read</span>
+          <span class="desc">Zero the unread counter</span>
+        </summary>
+        <div class="ep-body">
+          <p>Local bookkeeping only — this does not send a read receipt to WhatsApp.</p>
+          <h4>Response 200</h4>
+          <div class="code"><pre>{ "unread": 0 }</pre></div>
+        </div>
+      </details>
+    </section>
+
+    <!-- ---------- contacts ---------- -->
+    <section class="grp" id="contacts" data-group="Contacts">
+      <h2 class="grp-title">Contacts</h2>
+      <p class="grp-note">
+        A small CRM per tenant. Rows are created automatically the first time you message
+        someone or they message you.
+      </p>
+
+      <details class="ep" data-method="GET" data-path="/api/contacts" id="ep-contacts-list">
+        <summary>
+          <span class="m get">GET</span>
+          <span class="path">/api/contacts</span>
+          <span class="desc">List contacts, filterable</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Query parameters</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Name</th><th>Type</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">status</td><td class="mono">string</td><td>Exact match on the pipeline stage</td></tr>
+              <tr><td class="mono">tag</td><td class="mono">string</td><td>Rows whose <code>tags</code> array contains this</td></tr>
+            </tbody>
+          </table></div>
+          <p class="note">Up to 500 rows, newest-updated first.</p>
+        </div>
+      </details>
+
+      <details class="ep" data-method="POST" data-path="/api/contacts" id="ep-contacts-create">
+        <summary>
+          <span class="m post">POST</span>
+          <span class="path">/api/contacts</span>
+          <span class="desc">Create or update a contact</span>
+        </summary>
+        <div class="ep-body">
+          <p>Upserts on the recipient, so calling it twice updates rather than duplicates.</p>
+          <h4>Body</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Field</th><th>Type</th><th></th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">number</td><td class="mono">string</td><td><span class="req">required</span></td><td>Also accepted as <code>to</code> or <code>jid</code></td></tr>
+              <tr><td class="mono">name</td><td class="mono">string</td><td><span class="opt">optional</span></td><td>Max 120 chars</td></tr>
+              <tr><td class="mono">status</td><td class="mono">string</td><td><span class="opt">optional</span></td><td>Defaults to <code>"new"</code></td></tr>
+              <tr><td class="mono">tags</td><td class="mono">string[]</td><td><span class="opt">optional</span></td><td>First 20 kept</td></tr>
+              <tr><td class="mono">notes</td><td class="mono">string</td><td><span class="opt">optional</span></td><td>Max 4000 chars</td></tr>
+              <tr><td class="mono">consent</td><td class="mono">string</td><td><span class="opt">optional</span></td><td>Max 200 chars — how you obtained permission</td></tr>
+            </tbody>
+          </table></div>
+          <h4>Response 201</h4>
+          <p>The stored contact row.</p>
+        </div>
+      </details>
+
+      <details class="ep" data-method="PATCH" data-path="/api/contacts/{id}" id="ep-contacts-patch">
+        <summary>
+          <span class="m patch">PATCH</span>
+          <span class="path">/api/contacts/<span class="var">{id}</span></span>
+          <span class="desc">Edit a contact, or record an opt-out</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Body</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">name</td><td class="mono">string</td><td>Max 120 chars</td></tr>
+              <tr><td class="mono">status</td><td class="mono">string</td><td>Pipeline stage</td></tr>
+              <tr><td class="mono">tags</td><td class="mono">string[]</td><td>Replaces the array, first 20 kept</td></tr>
+              <tr><td class="mono">notes</td><td class="mono">string</td><td>Max 4000 chars</td></tr>
+              <tr><td class="mono">consent</td><td class="mono">string</td><td>Max 200 chars</td></tr>
+              <tr><td class="mono">optedOut</td><td class="mono">boolean</td><td>Blocks all future sends to this contact</td></tr>
+            </tbody>
+          </table></div>
+          <div class="callout">
+            <strong>Opt-out is enforced server-side</strong>
+            With <code>optedOut: true</code>, both <code>/api/send/text</code> and
+            <code>/api/send/media</code> refuse this contact with <code>403</code>. There
+            is no path around it.
+          </div>
+          <p class="note">At least one field is required, or you get <code>400</code>.
+             Unknown ids return <code>404</code>.</p>
+        </div>
+      </details>
+
+      <details class="ep" data-method="DELETE" data-path="/api/contacts/{id}" id="ep-contacts-delete">
+        <summary>
+          <span class="m delete">DELETE</span>
+          <span class="path">/api/contacts/<span class="var">{id}</span></span>
+          <span class="desc">Delete a contact</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Response 200</h4>
+          <div class="code"><pre>{ "deleted": true }</pre></div>
+          <p class="note">Deleting a contact does not delete their stored messages.
+             Re-creating the contact resets <code>opted_out</code> to false — prefer
+             <code>PATCH … optedOut</code> over delete for suppression.</p>
+        </div>
+      </details>
+    </section>
+
+    <!-- ---------- analytics ---------- -->
+    <section class="grp" id="analytics" data-group="Analytics">
+      <h2 class="grp-title">Analytics</h2>
+
+      <details class="ep" data-method="GET" data-path="/api/usage" id="ep-usage">
+        <summary>
+          <span class="m get">GET</span>
+          <span class="path">/api/usage</span>
+          <span class="desc">Daily sent/received/failed counts</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Query parameters</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Name</th><th>Type</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">days</td><td class="mono">integer</td><td>1–90, default 14. Out-of-range values are clamped</td></tr>
+            </tbody>
+          </table></div>
+          <h4>Response 200</h4>
+          <div class="code"><pre>{
+  "days": 14,
+  "series": [{ "day": "2026-09-08", "sent": 12, "received": 30, "failed": 0 }],
+  "totals": { "sent": 12, "received": 30, "failed": 0 },
+  "contacts": 41
+}</pre></div>
+          <p class="note">Days with no activity are absent from <code>series</code> rather
+             than zero-filled — pad client-side if you are drawing a chart.</p>
+        </div>
+      </details>
+    </section>
+
+    <!-- ---------- admin ---------- -->
+    <section class="grp" id="admin" data-group="Admin">
+      <h2 class="grp-title">Admin</h2>
+      <p class="grp-note">
+        Service management across every tenant. Requires the <code>admin</code> role
+        <strong>and</strong> a signed-in session — API keys are refused.
+      </p>
+
+      <details class="ep" data-method="GET" data-path="/api/admin/overview" id="ep-admin-overview">
+        <summary>
+          <span class="m get">GET</span>
+          <span class="path">/api/admin/overview</span>
+          <span class="desc">Service-wide counts and process health</span>
+          <span class="auth-badge admin">admin</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Response 200</h4>
+          <div class="code"><pre>{
+  "accounts": { "total": 8, "admins": 1, "clients": 7, "suspended": 0 },
+  "sessions": { "total": 6, "byState": { "connected": 5, "idle": 1 } },
+  "contacts": 1204,
+  "messages": 8817,
+  "usage": [{ "day": "2026-09-08", "sent": 210, "received": 640, "failed": 2 }],
+  "process": { "liveSessions": 5, "uptimeSeconds": 86400, "rssMb": 412 }
+}</pre></div>
+          <p class="note"><code>process.rssMb</code> against your instance size is the
+             number that tells you whether to raise <code>MAX_TENANT_SESSIONS</code>.</p>
+        </div>
+      </details>
+
+      <details class="ep" data-method="GET" data-path="/api/admin/accounts" id="ep-admin-accounts">
+        <summary>
+          <span class="m get">GET</span>
+          <span class="path">/api/admin/accounts</span>
+          <span class="desc">Every account with its session state</span>
+          <span class="auth-badge admin">admin</span>
+        </summary>
+        <div class="ep-body">
+          <p>Each row carries the stored <code>session</code> plus
+             <code>liveInProcess</code>. The two disagree after a restart — the database
+             says what it last saw, <code>liveInProcess</code> says whether a socket is
+             running right now.</p>
+        </div>
+      </details>
+
+      <details class="ep" data-method="PATCH" data-path="/api/admin/accounts/{id}" id="ep-admin-account-patch">
+        <summary>
+          <span class="m patch">PATCH</span>
+          <span class="path">/api/admin/accounts/<span class="var">{id}</span></span>
+          <span class="desc">Change a role, suspend, or set a company</span>
+          <span class="auth-badge admin">admin</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Body</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">role</td><td class="mono">enum</td><td><code>admin</code> · <code>client</code></td></tr>
+              <tr><td class="mono">status</td><td class="mono">enum</td><td><code>active</code> · <code>suspended</code></td></tr>
+              <tr><td class="mono">company</td><td class="mono">string</td><td>Truncated to 120 chars</td></tr>
+            </tbody>
+          </table></div>
+          <div class="callout warn">
+            <strong>Three lockout guards, all returning <code>409</code></strong>
+            You cannot remove your own admin role, cannot suspend your own account, and
+            cannot demote or suspend the last remaining active admin.
+          </div>
+          <p class="note">Suspending a client drops their live socket immediately and
+             invalidates their cached tokens — it does not wait for expiry.</p>
+        </div>
+      </details>
+
+      <details class="ep" data-method="DELETE" data-path="/api/admin/accounts/{id}" id="ep-admin-account-delete">
+        <summary>
+          <span class="m delete">DELETE</span>
+          <span class="path">/api/admin/accounts/<span class="var">{id}</span></span>
+          <span class="desc">Delete an account and all its data</span>
+          <span class="auth-badge admin">admin</span>
+        </summary>
+        <div class="ep-body">
+          <div class="callout bad">
+            <strong>Irreversible</strong>
+            Removes the auth user; the profile, sessions, keys, contacts and messages all
+            cascade away. Their WhatsApp socket is stopped first. You cannot delete your
+            own account (<code>409</code>).
+          </div>
+          <h4>Response 200</h4>
+          <div class="code"><pre>{ "deleted": true }</pre></div>
+        </div>
+      </details>
+
+      <details class="ep" data-method="GET" data-path="/api/admin/sessions" id="ep-admin-sessions">
+        <summary>
+          <span class="m get">GET</span>
+          <span class="path">/api/admin/sessions</span>
+          <span class="desc">Live sockets versus stored state</span>
+          <span class="auth-badge admin">admin</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Response 200</h4>
+          <div class="code"><pre>{
+  "live":  [{ "userId": "2dec…", "state": "connected", "connected": true, "queued": 0, "touchedAt": "…" }],
+  "stored":[{ "userId": "2dec…", "email": "client@example.com", "state": "connected", "waJid": "…", "lastError": null }]
+}</pre></div>
+        </div>
+      </details>
+
+      <details class="ep" data-method="POST" data-path="/api/admin/sessions/{userId}/start" id="ep-admin-session-start">
+        <summary>
+          <span class="m post">POST</span>
+          <span class="path">/api/admin/sessions/<span class="var">{userId}</span>/start</span>
+          <span class="desc">Bring a tenant's session up</span>
+          <span class="auth-badge admin">admin</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Response 202</h4>
+          <div class="code"><pre>{ "state": "connecting" }</pre></div>
+        </div>
+      </details>
+
+      <details class="ep" data-method="POST" data-path="/api/admin/sessions/{userId}/stop" id="ep-admin-session-stop">
+        <summary>
+          <span class="m post">POST</span>
+          <span class="path">/api/admin/sessions/<span class="var">{userId}</span>/stop</span>
+          <span class="desc">Stop a tenant's socket</span>
+          <span class="auth-badge admin">admin</span>
+        </summary>
+        <div class="ep-body">
+          <p>Frees the slot without unlinking anything — their credentials stay on disk
+             and the next request starts the socket again.</p>
+          <h4>Response 200</h4>
+          <div class="code"><pre>{ "stopped": true }</pre></div>
+          <p class="note"><code>false</code> means no socket was running for that user.</p>
+        </div>
+      </details>
+
+      <details class="ep" data-method="GET" data-path="/api/admin/audit" id="ep-admin-audit">
+        <summary>
+          <span class="m get">GET</span>
+          <span class="path">/api/admin/audit</span>
+          <span class="desc">Audit log, newest first</span>
+          <span class="auth-badge admin">admin</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Query parameters</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Name</th><th>Type</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">limit</td><td class="mono">integer</td><td>1–500, default 100. Clamped</td></tr>
+            </tbody>
+          </table></div>
+          <p class="note">Actions recorded: <code>session.start</code>,
+             <code>session.logout</code>, <code>key.create</code>,
+             <code>key.revoke</code>, <code>wa.connected</code>,
+             <code>admin.account.update</code>, <code>admin.account.delete</code>,
+             <code>admin.session.start</code>, <code>admin.session.stop</code>.</p>
+        </div>
+      </details>
+    </section>
+
+    <!-- ---------- webhook ---------- -->
+    <section class="grp" id="webhook" data-group="Webhooks">
+      <h2 class="grp-title">Webhooks</h2>
+      <p class="grp-note">
+        Optional. Inbound messages are always stored in the database; set
+        <code>WEBHOOK_URL</code> to also forward them to your own endpoint.
+      </p>
+
+      <h4>Delivery</h4>
+      <p>
+        <code>POST</code> with <code>content-type: application/json</code> and
+        <code>user-agent: wa-http-api/1.0</code>. If <code>WEBHOOK_SECRET</code> is set it
+        is sent as <code>x-webhook-secret</code> — compare it before trusting the payload.
+      </p>
+      <p>
+        Retries up to <code>WEBHOOK_MAX_ATTEMPTS</code> (default 3) with backoff of
+        500 ms, 1 s, 2 s… capped at 8 s. Retried on <code>408</code>,
+        <code>429</code> and any <code>5xx</code>; any other <code>4xx</code> is treated
+        as a permanent rejection and dropped. Timeout is
+        <code>WEBHOOK_TIMEOUT_MS</code> (default 10 s).
+      </p>
+
+      <div class="callout">
+        <strong>Your receiver cannot break the bridge</strong>
+        Delivery is fire-and-forget and never blocks the message stream. A slow or dead
+        receiver is logged and abandoned — messages still land in the database.
+      </div>
+
+      <h4>Payload</h4>
+      <div class="code"><pre>{
+  "session": "wa-http-api",
+  "id": "3EB0F3C7A1B2C3D4E5",
+  "from": "919876543210@s.whatsapp.net",
+  "fromNumber": "919876543210",
+  "isGroup": false,
+  "groupJid": null,
+  "participant": "919876543210@s.whatsapp.net",
+  "participantNumber": "919876543210",
+  "pushName": "Asha",
+  "timestamp": 1788862001,
+  "type": "conversation",
+  "text": "Hi, is this still available?",
+  "receivedAt": "2026-09-08T11:14:07.412Z"
+}</pre></div>
+      <p class="note">
+        In a group, <code>from</code>/<code>groupJid</code> is the group and
+        <code>participant</code> is the actual sender. In a 1:1 chat they are the same.
+        <code>timestamp</code> is Unix seconds from WhatsApp; <code>receivedAt</code> is
+        ISO-8601 from this server.
+      </p>
+
+      <h4>Not forwarded</h4>
+      <p>Your own outgoing messages, status/story broadcasts, and protocol-only stanzas
+         with no readable content.</p>
+    </section>
+
+    <!-- ---------- errors ---------- -->
+    <section class="grp" id="errors" data-group="Errors">
+      <h2 class="grp-title">Errors</h2>
+      <p class="grp-note">Every failure returns the same JSON shape.</p>
+
+      <div class="code"><pre>{
+  "error": "recipient_not_found",
+  "message": "919876543210 is not reachable on WhatsApp. If you left off the country code, add it (91 for India, so 91919876543210).",
+  "details": { "number": "919876543210", "checked": true }
+}</pre></div>
+      <p class="note"><code>error</code> is the stable machine-readable code — branch on
+         it. <code>message</code> is written for a human and may change.
+         <code>details</code> is present only when it adds something.</p>
+
+      <div class="scroll-x">
+        <table>
+          <thead><tr><th>Status</th><th>Code</th><th>When</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">400</td><td class="mono">bad_request</td><td>Malformed JSON, a missing field, or a value that failed validation</td></tr>
+            <tr><td class="mono">401</td><td class="mono">unauthorized</td><td>No credential, an expired session, or a revoked API key</td></tr>
+            <tr><td class="mono">403</td><td class="mono">forbidden</td><td>Not an admin, an API key on an admin route, or a contact who opted out</td></tr>
+            <tr><td class="mono">404</td><td class="mono">not_found</td><td>No such route, or no such row of yours</td></tr>
+            <tr><td class="mono">404</td><td class="mono">recipient_not_found</td><td>WhatsApp says that number is not reachable</td></tr>
+            <tr><td class="mono">409</td><td class="mono">conflict</td><td>Already linked, or an admin guard would lock you out</td></tr>
+            <tr><td class="mono">502</td><td class="mono">upstream_error</td><td>Database or WhatsApp failed the operation</td></tr>
+            <tr><td class="mono">503</td><td class="mono">service_unavailable</td><td>Not connected, queue full, session cap reached, or Supabase not configured</td></tr>
+            <tr><td class="mono">500</td><td class="mono">internal_error</td><td>Unhandled — details are logged, never returned</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout warn">
+        <strong>Retrying</strong>
+        <code>503</code> is worth retrying with backoff — it usually means "connecting"
+        or "throttled". <code>4xx</code> is not: the request itself needs to change.
+      </div>
+    </section>
+
+    <p class="note" style="margin-top:30px">
+      Self-hosted — you are reading the reference for this deployment. Limits shown are
+      the defaults; the operator may have changed them.
+    </p>
+  </main>
+</div>
+
+<script type="module">
+const $ = id => document.getElementById(id)
+
+/* Every example is written against the origin actually serving this page, so
+   copy-paste works on localhost, behind a tunnel, and in production alike. */
+const ORIGIN = location.origin
+
+$('baseUrl').textContent = ORIGIN
+
+const SAMPLES = {
+  'send-text': `curl -X POST ${ORIGIN}/api/send/text \\
+  -H "x-api-key: wak_YOUR_KEY" \\
+  -H "content-type: application/json" \\
+  -d '{
+    "to": "919876543210",
+    "message": "Hello from the API"
+  }'`,
+  'send-media': `curl -X POST ${ORIGIN}/api/send/media \\
+  -H "x-api-key: wak_YOUR_KEY" \\
+  -H "content-type: application/json" \\
+  -d '{
+    "to": "919876543210",
+    "type": "image",
+    "url": "https://example.com/photo.jpg",
+    "caption": "Here it is"
+  }'`,
+  check: `curl ${ORIGIN}/api/check/919876543210 \\
+  -H "x-api-key: wak_YOUR_KEY"`
+}
+
+for (const pre of document.querySelectorAll('pre.sample')) {
+  pre.textContent = SAMPLES[pre.dataset.sample] ?? ''
+}
+
+$('quickstart').textContent = `# 1. Link your phone: open the dashboard and scan the QR
+open ${ORIGIN}/app/
+
+# 2. Mint an API key (Settings tab, or over HTTP with a session token)
+
+# 3. Send a message
+curl -X POST ${ORIGIN}/api/send/text \\
+  -H "x-api-key: wak_YOUR_KEY" \\
+  -H "content-type: application/json" \\
+  -d '{"to":"919876543210","message":"Hello"}'`
+
+$('authKeyEx').textContent = `curl ${ORIGIN}/api/me \\
+  -H "x-api-key: wak_YOUR_KEY"`
+
+$('authBearerEx').textContent = `curl ${ORIGIN}/api/me \\
+  -H "authorization: Bearer YOUR_SUPABASE_ACCESS_TOKEN"`
+
+/* ---- sidebar, built from the endpoints so the two cannot drift apart ---- */
+const nav = $('nav')
+for (const section of document.querySelectorAll('section.grp')) {
+  const label = document.createElement('div')
+  label.className = 'group-label'
+  label.textContent = section.dataset.group
+  nav.append(label)
+
+  const eps = section.querySelectorAll('details.ep')
+  if (!eps.length) {
+    // A prose section (auth, errors, webhooks) gets one link to itself.
+    const a = document.createElement('a')
+    a.href = '#' + section.id
+    a.dataset.search = section.dataset.group.toLowerCase()
+    a.innerHTML = '<span class="p">Read section</span>'
+    nav.append(a)
+    continue
+  }
+
+  for (const ep of eps) {
+    const method = ep.dataset.method
+    const path = ep.dataset.path
+    const a = document.createElement('a')
+    a.href = '#' + ep.id
+    a.dataset.search = (method + ' ' + path + ' ' + ep.querySelector('.desc').textContent).toLowerCase()
+    a.innerHTML =
+      `<span class="m ${method.toLowerCase()}">${method}</span><span class="p">${path}</span>`
+    nav.append(a)
+  }
+}
+
+/* ---- filter ---- */
+$('filter').addEventListener('input', e => {
+  const q = e.target.value.trim().toLowerCase()
+  let shown = 0
+  for (const a of nav.querySelectorAll('a')) {
+    const hit = !q || a.dataset.search.includes(q)
+    a.hidden = !hit
+    if (hit) shown++
+  }
+  // Hide a group heading whose every link is filtered out.
+  for (const label of nav.querySelectorAll('.group-label')) {
+    let el = label.nextElementSibling
+    let any = false
+    while (el && !el.classList.contains('group-label')) {
+      if (el.tagName === 'A' && !el.hidden) any = true
+      el = el.nextElementSibling
+    }
+    label.hidden = !any
+  }
+  let empty = nav.querySelector('.side-empty')
+  if (!shown) {
+    if (!empty) {
+      empty = document.createElement('div')
+      empty.className = 'side-empty'
+      empty.textContent = 'No endpoint matches that.'
+      nav.append(empty)
+    }
+    empty.hidden = false
+  } else if (empty) {
+    empty.hidden = true
+  }
+})
+
+/* ---- open the endpoint a deep link points at ---- */
+function openFromHash() {
+  const id = decodeURIComponent(location.hash.slice(1))
+  if (!id) return
+  const target = document.getElementById(id)
+  if (target?.tagName === 'DETAILS') {
+    target.open = true
+    target.scrollIntoView({ block: 'start' })
+  }
+}
+addEventListener('hashchange', openFromHash)
+openFromHash()
+
+/* ---- highlight the visible section in the sidebar ---- */
+const links = [...nav.querySelectorAll('a')]
+const spy = new IntersectionObserver(
+  entries => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue
+      const id = entry.target.id
+      for (const a of links) a.classList.toggle('active', a.getAttribute('href') === '#' + id)
+    }
+  },
+  { rootMargin: '-70px 0px -70% 0px' }
+)
+for (const ep of document.querySelectorAll('details.ep, section.grp')) spy.observe(ep)
+
+/* ---- copy buttons ---- */
+for (const block of document.querySelectorAll('.code')) {
+  const pre = block.querySelector('pre')
+  const btn = document.createElement('button')
+  btn.className = 'copy'
+  btn.type = 'button'
+  btn.textContent = 'Copy'
+  btn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(pre.textContent)
+      btn.textContent = 'Copied'
+    } catch {
+      // Clipboard is blocked without a secure context or permission.
+      btn.textContent = 'Select it'
+    }
+    setTimeout(() => (btn.textContent = 'Copy'), 1400)
+  })
+  block.append(btn)
+}
+
+/* ---- live server badge, so the page says whether this deployment works ---- */
+try {
+  const health = await fetch('/health').then(r => r.json())
+  const ok = health.status === 'ok' && health.supabase
+  $('serverDot').className = 'dot ' + (ok ? 'ok live' : 'warn')
+  $('serverText').textContent = ok
+    ? `live · ${health.liveSessions} session${health.liveSessions === 1 ? '' : 's'}`
+    : 'up, Supabase not configured'
+} catch {
+  $('serverDot').className = 'dot bad'
+  $('serverText').textContent = 'unreachable'
+}
+</script>
+</body>
+</html>
