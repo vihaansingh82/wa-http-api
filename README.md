@@ -1,280 +1,198 @@
 # wa-http-api
 
-A small self-hosted HTTP API in front of a personal WhatsApp account, built on
-[Baileys](https://github.com/WhiskeySockets/Baileys) **v7** and Express 5.
-Pair once by scanning a QR, then send and receive messages over plain HTTP.
+A self-hosted, **multi-tenant** WhatsApp HTTP API. Each client signs up, links
+their own WhatsApp by scanning a QR, and gets their own API key. Built on
+[Baileys](https://github.com/WhiskeySockets/Baileys) **v7**, Express 5 and
+Supabase.
 
-- Node.js 20+, ES modules, no build step
-- Session persisted to disk via `useMultiFileAuthState`
-- Auto-reconnect with exponential backoff, and a fresh QR when the device is unlinked
-- One global outgoing throttle (`SEND_DELAY_MS`) to reduce ban risk
-- Incoming messages forwarded to your own webhook, with retries
-- Browser console that links by QR and issues its own API token, no manual setup
+- **Two dashboards** — a client dashboard at `/app` and an admin dashboard at `/admin`
+- **Supabase Auth** — sign-up, email confirmation and password reset, no auth code of our own
+- **One WhatsApp socket per client**, with per-tenant credentials on disk
+- **CRM built in** — conversations, contacts, tags, consent and opt-out tracking
+- Node.js 22+, ES modules, no build step, no frontend framework
 
-> **Heads-up:** this drives WhatsApp Web as an unofficial client. Sending bulk or
-> unsolicited messages from a personal number is a good way to get it banned.
-> For anything commercial, use the official WhatsApp Business Cloud API instead.
+> **Read this before selling it.** This drives WhatsApp Web through an
+> unofficial client. Bulk outreach to people who did not opt in is the fastest
+> way to get a number banned, and a ban takes that client's whole integration
+> down. For sanctioned commercial messaging, use the official
+> [WhatsApp Business Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api).
+> Contacts here carry `consent` and `opted_out` fields, and an opted-out contact
+> cannot be messaged by any route — deliberately.
 
 ---
 
-## Baileys v7 notes
+## How it fits together
 
-v7 changed a few things that most tutorials still get wrong, so if you are
-adapting older code:
+```
+Browser ──── Supabase Auth ─────► access token
+   │                                   │
+   │  /app  (client dashboard)         │  Authorization: Bearer …
+   │  /admin (admin dashboard)         ▼
+   └────────────────────────► Node server ────► Supabase Postgres (RLS)
+                                   │
+                                   ├─► Baileys socket for tenant A
+                                   ├─► Baileys socket for tenant B
+                                   └─► …
+```
 
-| Older pattern | v7 |
+- **Supabase** owns accounts and all tenant data: profiles, contacts, messages,
+  API keys, usage and the audit log.
+- **The Node server** owns the WhatsApp connections. It talks to Supabase with
+  the service-role key, so **every query it makes filters by `user_id` itself** —
+  row-level security is bypassed by that key and cannot save us.
+- **The browser** talks to Supabase directly only for auth. All data goes through
+  this server's API.
+
+### Roles
+
+| Role | Can |
 | --- | --- |
-| `@whiskeysockets/baileys` | package is now **`baileys`** |
-| CommonJS `require()` | package is **ESM-only** (`"type": "module"`) |
-| `printQRInTerminal: true` | **removed** — read `qr` off `connection.update` and render it yourself |
-| `@adiwajshing/keyed-db`, `makeInMemoryStore` | gone; keep your own state |
-| `node-cache` | Baileys ships `@cacheable/node-cache` |
-| Node 16/18 | **Node 20+** is enforced by a preinstall check |
+| `client` | Link one WhatsApp, send and receive, manage their own contacts and API keys |
+| `admin` | Everything a client can, plus manage every account, session and the audit log |
 
-This project reads the QR from `connection.update`, prints it with
-`qrcode-terminal`, and renders the same string to a PNG data URL for `GET /qr`.
+**The first account to sign up becomes the admin.** After that, every new signup
+is a client. That is a database trigger, not app logic, so it holds even if
+someone hits the Supabase API directly.
 
 ---
 
 ## Setup
 
+### 1. A Supabase project
+
+Create one (the free tier is enough), then apply the four migrations in
+[supabase/migrations/](supabase/migrations/) — either with the Supabase CLI
+(`supabase db push`) or by pasting them into the SQL editor in order.
+
+They create `profiles`, `wa_sessions`, `api_keys`, `contacts`, `wa_messages`,
+`campaigns`, `usage_daily` and `audit_log`, turn on row-level security for all
+of them, and add the trigger that mirrors `auth.users` into `profiles`.
+
+> **Use a dedicated project.** Supabase Auth is per-project, so sharing one with
+> another app means that app's users can sign into this dashboard and yours
+> appear in its user list. Table names like `messages` collide too.
+
+### 2. Configure and run
+
 ```bash
-git clone <your-repo> wa-http-api && cd wa-http-api
 npm install
-
 cp .env.example .env
-# Generate an API key and paste it into .env
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
 
+Fill in from **Supabase → Project Settings → API**:
+
+```ini
+SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_...   # safe in the browser
+SUPABASE_SERVICE_ROLE_KEY=...                 # SECRET, server only
+PUBLIC_URL=http://localhost:3000              # for reset/confirm links
+```
+
+```bash
 npm start
 ```
 
-Now open <http://localhost:3000> and click **Link WhatsApp**. Scan the code with
-your phone and you are done — the console mints its own API token as soon as the
-phone connects.
+Then open <http://localhost:3000/app> and **create the first account** — it
+becomes the admin.
 
-A QR is also printed to the terminal if you would rather scan it there. Either
-way, once `connection state changed: open` appears in the log you are linked.
-The session lives in `AUTH_DIR` (`./auth` by default) and is reused on restart,
-so this is a one-time step.
+### 3. Email links
 
-### The web console
+Password reset and email confirmation are sent by Supabase. In
+**Authentication → URL Configuration**, add your `PUBLIC_URL` to the redirect
+allow-list, including `/app/**`, or the links in those emails will refuse to come
+back to your dashboard.
 
-Open the server root in a browser and you get a control panel that works the way
-WhatsApp Web does — click, scan, done:
-
-```
-http://localhost:3000
-```
-
-1. Click **Link WhatsApp**. A QR appears and refreshes itself as WhatsApp
-   rotates it.
-2. Scan it from your phone (Settings → Linked devices → Link a device).
-3. The moment it connects, the server **mints an API token for you** and the
-   console signs itself in with it. Nothing to copy, nothing to paste.
-
-The token is also DMed to your own WhatsApp chat, so it lands on the phone as
-well — turn that off with `SEND_TOKEN_TO_PHONE=false` if you would rather no
-credential ever touched a chat log.
-
-After that the panel has two tabs:
-
-- **Console** — live status, send text, send media, number lookup, unlink.
-- **API docs** — the whole reference, in the page: every endpoint with its
-  request body, a copy-ready curl example **with your own token already filled
-  in**, and a sample response. Plus recipient formats, the webhook payload,
-  rate-limiting behaviour, and the error table. A *mask my token* checkbox
-  swaps in a placeholder when you want to screenshot it.
-
-It is plain static HTML served by the API itself, so it talks to the same
-origin — no CORS, no proxy, no build step. The HTML is sent with
-`Cache-Control: no-cache` so an updated server never leaves you on a stale page.
-
-## Authentication
-
-There are two kinds of credential, both presented as `x-api-key` (or
-`Authorization: Bearer …`):
-
-| | **Admin key** | **Device token** |
-| --- | --- | --- |
-| Where it comes from | `API_KEY` in `.env` | minted when a phone completes pairing |
-| Looks like | whatever you set | `wa_…` |
-| Stored | your `.env` | **hashed** (SHA-256) in `TOKEN_STORE` |
-| Survives `POST /logout` | yes | no — revoked |
-| Good for | scripts, cron, curl | the console, per-browser access |
-
-**Why pairing is allowed to mint a credential.** The QR is the authentication:
-whoever scans it is holding the phone that owns the account. That is the same
-argument WhatsApp Web makes. So `POST /pair/start` needs no prior secret — but
-**only from loopback**, on the assumption that being at the machine is itself
-meaningful. From any other address it returns `401` unless you send the admin
-key, or set `ALLOW_REMOTE_PAIRING=true` because you have put your own
-authentication in front of the server.
-
-Tokens are stored only as a SHA-256 hash, so a leaked `tokens.json` cannot be
-replayed against the API, and the plaintext genuinely cannot be shown twice.
-
-If you expose this beyond localhost, put it behind TLS and your own access
-control. A credential is the only thing standing between the internet and your
-WhatsApp account.
-
-### Configuration
-
-Every setting is an environment variable; see [.env.example](.env.example).
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `PORT` / `HOST` | `3000` / `0.0.0.0` | HTTP listener |
-| `API_KEY` | *(required)* | Admin key, min 16 chars. Never expires, survives logout |
-| `AUTH_DIR` | `./auth` | Where the session is stored |
-| `SESSION_NAME` | `wa-http-api` | Label included in webhook payloads |
-| `TOKEN_STORE` | `./data/tokens.json` | Where hashed device tokens live |
-| `SEND_TOKEN_TO_PHONE` | `true` | Also DM a new token to your own WhatsApp chat |
-| `PAIR_CLAIM_TTL_MS` | `600000` | How long a pairing attempt stays claimable |
-| `ALLOW_REMOTE_PAIRING` | `false` | Let non-loopback callers start a pairing |
-| `VERIFY_RECIPIENT` | `true` | Resolve each recipient via onWhatsApp before sending |
-| `SEND_DELAY_MS` | `3000` | Minimum gap between two outgoing sends |
-| `MAX_QUEUE_SIZE` | `500` | Queue depth before sends are rejected with 503 |
-| `WEBHOOK_URL` | *(empty)* | Where incoming messages are POSTed; empty disables forwarding |
-| `WEBHOOK_SECRET` | *(empty)* | Sent as `x-webhook-secret` so your receiver can verify the caller |
-| `WEBHOOK_TIMEOUT_MS` | `10000` | Per-attempt webhook timeout |
-| `WEBHOOK_MAX_ATTEMPTS` | `3` | Webhook attempts before giving up |
-| `LOG_LEVEL` | `info` | pino level |
-| `LOG_PRETTY` | `false` | Human-readable logs (leave off in Docker) |
-
-**`AUTH_DIR` is a credential.** Anyone with a copy of that folder can send
-messages as you. Do not commit it (it is in `.gitignore`) and do not bake it
-into an image. `TOKEN_STORE` holds only hashes, so it is not replayable, but it
-is gitignored too.
+Supabase's built-in mailer is rate-limited and only for testing. For real use,
+set your own SMTP under **Authentication → Emails**.
 
 ---
 
-## Endpoints
+## The dashboards
 
-Most routes need a credential in `x-api-key` (the admin key or a device
-token). The console, `/health` and the pairing routes are the exceptions noted
-in the table.
-Errors are always JSON: `{ "error": "<code>", "message": "...", "details": {...} }`.
+### `/app` — client
 
-| Method | Route | Auth | Purpose |
-| --- | --- | --- | --- |
-| GET | `/` | public | Browser console (static HTML, no secrets) |
-| GET | `/health` | public | Liveness + connection flag |
-| POST | `/pair/start` | loopback | Begin a pairing, returns a claim id |
-| GET | `/pair/status/:claimId` | loopback | Poll a pairing: QR, then the minted token |
-| POST | `/pair/token` | loopback | Mint a token when already linked (new browser) |
-| GET | `/status` | credential | Diagnostics: linked user, queue depth, tokens, last disconnect |
-| GET | `/qr` | credential | Current pairing QR as a PNG data URL |
-| POST | `/send/text` | credential | Send a text message |
-| POST | `/send/media` | credential | Send an image, video or document by URL |
-| GET | `/check/:number` | credential | Is this number registered on WhatsApp? |
-| POST | `/tokens/revoke` | credential | Revoke every device token (admin key keeps working) |
-| POST | `/logout` | credential | Unlink the phone, wipe the session, revoke all tokens |
+1. **Sign up / sign in**, with a working *forgot password* flow.
+2. **Link WhatsApp** — a QR that refreshes itself as WhatsApp rotates it.
+3. **Overview** — sent/received/failed over 14 days, connection state.
+4. **Inbox** — conversation threads, with replies sent straight from the browser.
+5. **Contacts** — status, tags, consent, one-click opt-out.
+6. **Send** — text, media by URL, and a number lookup.
+7. **API keys** — create and revoke. The full key is shown **once**.
 
-"loopback" means no credential is needed from `127.0.0.1`; from anywhere else
-the admin key is required. See [Authentication](#authentication).
+### `/admin` — admin
 
-Set a shell variable first so the examples stay short:
+- **Overview** — service-wide traffic, account and session counts, process memory.
+- **Accounts** — promote/demote, suspend/reinstate, delete. Suspending kills the
+  client's live socket immediately rather than waiting for their token to expire.
+- **Sessions** — every client's WhatsApp state, and whether a socket is actually
+  running *in this process* (the two can disagree after a restart).
+- **Audit** — who did what, when.
 
-```bash
-export KEY="paste-your-API_KEY-here"
-export API="http://localhost:3000"
-```
+Admins are protected from locking everyone out: you cannot demote, suspend or
+delete your own account, and the last remaining admin cannot be demoted.
 
-### GET /health
+---
 
-No API key needed — point your load balancer or Docker healthcheck here.
+## Authentication
 
-```bash
-curl -s $API/health
-```
+Two credentials, both sent to the same API:
 
-```json
-{ "status": "ok", "connected": true, "connection": "open", "queued": 0, "uptimeSeconds": 412 }
-```
+| | Session token | API key |
+| --- | --- | --- |
+| Looks like | a Supabase JWT | `wak_…` |
+| Sent as | `Authorization: Bearer …` | `x-api-key: …` |
+| Used by | the dashboards | your own scripts |
+| Stored | in the browser | **hashed** (SHA-256) in `api_keys` |
+| Reaches `/api/admin/*` | yes, if admin | **never** |
 
-### Pairing from the command line
+That last row is deliberate: a leaked client key must not be able to suspend
+accounts or delete other tenants, so admin routes require a real login.
 
-The console does this for you, but the same three calls work from a shell —
-which is also how you would drive pairing from your own front end.
+---
 
-```bash
-# 1. open a claim (no credential needed from this machine)
-CLAIM=$(curl -s -X POST $API/pair/start | jq -r .claimId)
+## API
 
-# 2. poll: while unpaired this returns the QR as a data URL
-curl -s $API/pair/status/$CLAIM
-# {"state":"awaiting_scan","qr":"data:image/png;base64,iVBOR..."}
+Everything is under `/api` and scoped to whoever the credential belongs to.
+**No endpoint takes a user id** — there is nothing to tamper with.
 
-# 3. after you scan, the same poll returns the token, exactly once
-curl -s $API/pair/status/$CLAIM
-# {"state":"paired","user":{...},"token":"wa_Xa9..."}
-```
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | `/health` | Liveness (public) |
+| GET | `/api/public-config` | Supabase URL + publishable key for the dashboards (public) |
+| GET | `/api/me` | Your profile |
+| PATCH | `/api/me` | Update your name/company |
+| GET | `/api/session` | WhatsApp connection state |
+| POST | `/api/session/start` | Start your connection |
+| GET | `/api/session/qr` | Current QR as a PNG data URL |
+| POST | `/api/session/logout` | Unlink your phone |
+| GET | `/api/keys` | List your API keys |
+| POST | `/api/keys` | Create one (returns the plaintext once) |
+| DELETE | `/api/keys/:id` | Revoke one |
+| POST | `/api/send/text` | Send a text |
+| POST | `/api/send/media` | Send image/video/document by URL |
+| GET | `/api/check/:number` | Is the number on WhatsApp? |
+| GET | `/api/inbox/threads` | Conversation list |
+| GET | `/api/inbox/threads/:jid` | Messages in one thread |
+| POST | `/api/inbox/threads/:jid/read` | Mark read |
+| GET/POST | `/api/contacts` | List / create |
+| PATCH/DELETE | `/api/contacts/:id` | Update / delete |
+| GET | `/api/usage` | Daily counters |
+| GET | `/api/admin/overview` | Service KPIs *(admin session)* |
+| GET | `/api/admin/accounts` | All accounts *(admin session)* |
+| PATCH/DELETE | `/api/admin/accounts/:id` | Manage an account *(admin session)* |
+| GET | `/api/admin/sessions` | All WhatsApp sessions *(admin session)* |
+| POST | `/api/admin/sessions/:userId/start\|stop` | Control one *(admin session)* |
+| GET | `/api/admin/audit` | Audit log *(admin session)* |
 
-- `state` is one of `awaiting_scan`, `paired`, `expired`.
-- `token` appears on the **first** poll after pairing; later polls return
-  `"tokenAlreadyCollected": true` instead. Store it when you see it.
-- A claim expires after `PAIR_CLAIM_TTL_MS` (default 10 minutes).
-
-Already linked and just need a token for another browser or script:
-
-```bash
-curl -s -X POST $API/pair/token
-# {"id":"a1b2c3d4e5f6","token":"wa_...","user":{...}}
-```
-
-### GET /status
-
-```bash
-curl -s -H "x-api-key: $KEY" $API/status
-```
-
-```json
-{
-  "session": "wa-http-api",
-  "connection": "open",
-  "connected": true,
-  "user": { "id": "919876543210:12@s.whatsapp.net", "name": "Asha" },
-  "hasQr": false,
-  "queued": 0,
-  "webhookConfigured": true,
-  "lastDisconnect": null
-}
-```
-
-### GET /qr
+### Sending
 
 ```bash
-curl -s -H "x-api-key: $KEY" $API/qr
-```
+KEY="wak_your_key"
+API="http://localhost:3000"
 
-```json
-{
-  "qr": "2@zX9...",
-  "dataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg...",
-  "generatedAt": "2026-09-07T11:25:21.816Z"
-}
-```
-
-- `409 conflict` — already paired. `POST /logout` first if you want a new QR.
-- `503 service_unavailable` — no QR yet, retry in a few seconds.
-
-Save it straight to a file and open it:
-
-```bash
-curl -s -H "x-api-key: $KEY" $API/qr \
-  | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const{dataUrl}=JSON.parse(s);require('fs').writeFileSync('qr.png',Buffer.from(dataUrl.split(',')[1],'base64'))})"
-```
-
-### POST /send/text
-
-Body: `{ "to": string, "message": string }`
-
-```bash
-curl -s -X POST $API/send/text \
-  -H "x-api-key: $KEY" \
-  -H "content-type: application/json" \
-  -d '{"to": "+91 98765 43210", "message": "Hello from the API"}'
+curl -s -X POST $API/api/send/text \
+  -H "x-api-key: $KEY" -H "content-type: application/json" \
+  -d '{"to": "+91 98765 43210", "message": "Hello"}'
 ```
 
 ```json
@@ -282,284 +200,79 @@ curl -s -X POST $API/send/text \
   "sent": true,
   "isGroup": false,
   "id": "3EB0C767D82B0F3A2B1C",
-  "to": "919876543210@s.whatsapp.net",
+  "to": "918285861066@s.whatsapp.net",
+  "requested": "8285861066@s.whatsapp.net",
+  "resolved": true,
   "timestamp": 1757248521
 }
 ```
 
-`202 Accepted` means the message left this process; delivery to the handset is
-asynchronous. To a group, pass the group JID:
-
-```bash
-curl -s -X POST $API/send/text \
-  -H "x-api-key: $KEY" \
-  -H "content-type: application/json" \
-  -d '{"to": "120363021234567890@g.us", "message": "Standup in 5"}'
-```
-
-### POST /send/media
-
-Body: `{ "to": string, "url": string, "type": "image" | "video" | "document", "caption"?: string, "mimetype"?: string, "fileName"?: string }`
-
-The URL must be `http`/`https` and reachable from the server — WhatsApp never
-sees it, Baileys downloads and re-uploads the bytes.
-
-```bash
-# image with a caption
-curl -s -X POST $API/send/media \
-  -H "x-api-key: $KEY" \
-  -H "content-type: application/json" \
-  -d '{"to": "919876543210", "type": "image", "url": "https://picsum.photos/600/400.jpg", "caption": "Site photo"}'
-
-# video
-curl -s -X POST $API/send/media \
-  -H "x-api-key: $KEY" \
-  -H "content-type: application/json" \
-  -d '{"to": "919876543210", "type": "video", "url": "https://example.com/clip.mp4", "caption": "Walkthrough"}'
-
-# document -- mimetype and fileName are derived from the URL when omitted
-curl -s -X POST $API/send/media \
-  -H "x-api-key: $KEY" \
-  -H "content-type: application/json" \
-  -d '{"to": "919876543210", "type": "document", "url": "https://example.com/invoice-4471.pdf", "fileName": "Invoice 4471.pdf"}'
-```
-
-```json
-{
-  "sent": true,
-  "type": "document",
-  "isGroup": false,
-  "id": "3EB0C7A11F9E4D2C88",
-  "to": "919876543210@s.whatsapp.net",
-  "timestamp": 1757248644
-}
-```
-
-### GET /check/:number
-
-Asks WhatsApp whether a number is registered (`onWhatsApp`). Note that a `+`
-inside a URL path must be percent-encoded as `%2B`, so it is easier to leave it out:
-
-```bash
-curl -s -H "x-api-key: $KEY" $API/check/919876543210
-```
-
-```json
-{ "number": "919876543210", "exists": true, "jid": "919876543210@s.whatsapp.net" }
-```
-
-```bash
-# a number that is not on WhatsApp
-curl -s -H "x-api-key: $KEY" $API/check/12025550123
-# {"number":"12025550123","exists":false,"jid":null}
-```
-
-### POST /logout
-
-Unlinks this device on the phone, deletes `AUTH_DIR`, and immediately starts a
-new pairing so a fresh QR shows up at `GET /qr`.
-
-```bash
-curl -s -X POST -H "x-api-key: $KEY" $API/logout
-```
-
-```json
-{ "loggedOut": true, "revokedTokens": 2, "message": "Session cleared and device tokens revoked. Link again from the console at /." }
-```
-
----
-
-## Number handling
-
-`to` accepts loose input and is normalised to a JID internally:
-
-| Input | Becomes |
-| --- | --- |
-| `+91 98765 43210` | `919876543210@s.whatsapp.net` |
-| `(91) 98765-43210` | `919876543210@s.whatsapp.net` |
-| `0091 98765 43210` | `919876543210@s.whatsapp.net` |
-| `919876543210@c.us` | `919876543210@s.whatsapp.net` |
-| `919876543210:12@s.whatsapp.net` | `919876543210@s.whatsapp.net` |
-| `120363021234567890@g.us` | passed through unchanged |
-
-Rules: non-digits are stripped, a leading `00` international prefix is dropped,
-and the result must be 7–15 digits. Group JIDs (`@g.us`) are opaque and never
-rewritten. `@broadcast` and `status@broadcast` are rejected.
+`202` means *queued*, not *delivered* — see [Rate limiting](#rate-limiting).
 
 ### Recipients are resolved, not guessed
 
-Before every send the recipient goes through `onWhatsApp`, and the JID it
-returns is the one actually used. This matters more than it sounds.
+Before every send the recipient goes through `onWhatsApp`, and the JID it returns
+is the one used. This matters more than it sounds: gluing `@s.whatsapp.net` onto
+whatever digits you typed produces a **syntactically valid JID belonging to
+nobody** when the country code is missing. WhatsApp accepts that stanza and
+silently discards it — so the API would answer `202 sent` and nothing would
+arrive.
 
-Gluing `@s.whatsapp.net` onto whatever digits you typed produces a
-**syntactically valid JID that belongs to nobody** when the country code is
-missing. WhatsApp accepts that stanza and silently discards it — so the API
-answers `202 sent` and the message never arrives. That is the worst kind of
-failure, because nothing looks wrong at either end.
+So `8285861066` becomes `918285861066@s.whatsapp.net`, and the response tells you
+it happened. A number genuinely not on WhatsApp gets `404 recipient_not_found`
+rather than a false success. `VERIFY_RECIPIENT=false` skips the lookup.
 
-So `8285861066` is resolved to `918285861066@s.whatsapp.net` (WhatsApp applies
-the linked account's own country), and the response says so:
-
-```json
-{
-  "sent": true,
-  "to": "918285861066@s.whatsapp.net",
-  "requested": "8285861066@s.whatsapp.net",
-  "resolved": true
-}
-```
-
-A number that genuinely is not on WhatsApp gets `404 recipient_not_found` with
-a message suggesting the country code, rather than a false success. Resolutions
-are cached, so repeat sends to the same recipient skip the lookup.
-
-Set `VERIFY_RECIPIENT=false` to skip it and send blind — only sensible if you
-already hold exact JIDs.
-
----
-
-## Incoming messages
-
-When `WEBHOOK_URL` is set, every new inbound message is POSTed there as JSON.
-Messages you sent yourself (`key.fromMe`) and status broadcasts are ignored,
-and only `notify`-type upserts are forwarded — not history sync.
-
-```json
-{
-  "session": "wa-http-api",
-  "id": "3A9F2C1B77E4",
-  "from": "120363021234567890@g.us",
-  "fromNumber": null,
-  "isGroup": true,
-  "groupJid": "120363021234567890@g.us",
-  "participant": "919999999999@s.whatsapp.net",
-  "participantNumber": "919999999999",
-  "pushName": "Asha",
-  "timestamp": 1757260800,
-  "type": "imageMessage",
-  "text": "look at this",
-  "receivedAt": "2026-09-07T12:00:00.000Z"
-}
-```
-
-- `from` is the chat. In a group, `participant` is the person who actually sent it; in a 1:1 chat the two match.
-- `type` is the Baileys message key (`conversation`, `extendedTextMessage`, `imageMessage`, `audioMessage`, `documentMessage`, …). Ephemeral and view-once wrappers are unwrapped first.
-- `text` is the body or caption, or `null` for messages that have no text.
-- `WEBHOOK_SECRET`, if set, arrives as the `x-webhook-secret` header — check it before trusting the payload.
-
-Delivery is retried up to `WEBHOOK_MAX_ATTEMPTS` times with 500ms/1s/2s backoff.
-`4xx` responses other than `408`/`429` are treated as permanent and not retried.
-A failing webhook is logged and dropped — it never crashes the bridge and never
-blocks the WhatsApp event stream.
-
-Quick receiver to watch what arrives:
-
-```bash
-node -e "require('http').createServer((q,s)=>{let b='';q.on('data',d=>b+=d).on('end',()=>{console.log(b);s.writeHead(200).end('ok')})}).listen(4000)"
-# then set WEBHOOK_URL=http://localhost:4000/hook and restart
-```
+Groups (`@g.us`) are passed through untouched. `@broadcast` is rejected.
 
 ---
 
 ## Rate limiting
 
-All outgoing sends pass through one serial FIFO queue that guarantees at least
-`SEND_DELAY_MS` (default 3000) between two sends. A burst of API calls therefore
-drains at a steady pace rather than firing at once, which is the behaviour that
+Each tenant has its own serial queue guaranteeing at least `SEND_DELAY_MS`
+(default 3000) between two of *their* sends. Firing messages back to back is what
 gets numbers flagged.
 
-Consequences worth knowing:
-
-- `202` means *queued and handed to WhatsApp*, not *delivered*.
 - With the default delay, 20 queued messages take about a minute to drain.
-- Once `MAX_QUEUE_SIZE` messages are waiting, further sends fail fast with
-  `503 service_unavailable` instead of growing memory without bound. Check
-  `queued` in `GET /status` if you are pushing volume.
+- Past `MAX_QUEUE_SIZE` waiting, sends fail fast with `503` instead of growing
+  memory. Watch `queued` in `GET /api/session`.
+- A queued message whose socket drops fails with `503` rather than being sent
+  late on a new connection.
+
+## Configuration
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SUPABASE_URL` | *(required)* | Project URL |
+| `SUPABASE_PUBLISHABLE_KEY` | *(required)* | Browser-safe key |
+| `SUPABASE_SERVICE_ROLE_KEY` | *(required)* | **Secret.** Bypasses RLS; server only |
+| `PUBLIC_URL` | *(empty)* | Origin for reset/confirmation links |
+| `PORT` / `HOST` | `3000` / `0.0.0.0` | HTTP listener |
+| `AUTH_DIR` | `./auth` | Per-tenant WhatsApp credentials live under `auth/tenants/<id>/` |
+| `MAX_TENANT_SESSIONS` | `25` | Cap on simultaneous sockets |
+| `VERIFY_RECIPIENT` | `true` | Resolve recipients before sending |
+| `SEND_DELAY_MS` | `3000` | Minimum gap between a tenant's sends |
+| `MAX_QUEUE_SIZE` | `500` | Queue depth before `503` |
+| `WEBHOOK_URL` | *(empty)* | Forward inbound messages here too |
+| `WEBHOOK_SECRET` | *(empty)* | Sent as `x-webhook-secret` |
+| `LOG_LEVEL` / `LOG_PRETTY` | `info` / `false` | Logging |
+
+**`AUTH_DIR` is a pile of credentials.** Anyone with a copy can send messages as
+any linked client. It is gitignored; keep it on a persistent disk and back it up
+like a password store.
+
+`MAX_TENANT_SESSIONS` is the real capacity limit: each socket is a live WebSocket
+plus its own Signal store. When the cap is hit, an idle session is evicted (a
+connected one only as a last resort) — its credentials stay on disk and the next
+request starts it again.
 
 ---
 
 ## Deploying
 
-See **[DEPLOY.md](DEPLOY.md)** for the full guide. The short version: this is a
-stateful, always-on service, so it needs a persistent disk for the session, a
-single instance, and no scale-to-zero. That rules out Vercel, Netlify, Workers
-and Lambda outright, and most free tiers.
-
-Two git-based paths are pre-configured:
-
-- **Fly.io** — [fly.toml](fly.toml) with a volume at `/data`, one always-on
-  machine, and a `/health` check. Push-to-deploy via
-  [.github/workflows/deploy.yml](.github/workflows/deploy.yml).
-- **Render** — [render.yaml](render.yaml) Blueprint: New > Blueprint, point it
-  at the repo. Attaches a 1 GB disk and generates `API_KEY` for you.
-
-Or run it on any VPS with [docker-compose.yml](docker-compose.yml).
-
-One deployment wrinkle worth knowing: pairing is credential-free only from
-loopback, so on a deployed instance you paste the admin key into the console
-once, then link by QR. [DEPLOY.md](DEPLOY.md#linking-your-phone-after-deploying)
-walks through it.
-
----
-
-## Docker
-
-```bash
-docker build -t wa-http-api .
-
-docker run -d --name wa \
-  -p 3000:3000 \
-  --env-file .env \
-  -e AUTH_DIR=/app/auth \
-  -v wa-auth:/app/auth \
-  --init \
-  wa-http-api
-
-# scan the QR from the container log
-docker logs -f wa
-```
-
-Or with Compose (`docker compose up -d`), which wires the same volume and
-`--init` for you — see [docker-compose.yml](docker-compose.yml).
-
-The `wa-auth` volume is what keeps you paired across rebuilds. Delete it and
-you have to scan a new QR.
-
----
-
-## Behaviour on disconnect
-
-| Situation | What happens |
-| --- | --- |
-| Network blip, `connectionClosed`, `connectionLost`, `timedOut` | Reconnect with exponential backoff (1s → 60s, jittered), reset on success |
-| `restartRequired` (515, normal right after pairing) | Immediate reconnect, no backoff |
-| `loggedOut` (401) or `forbidden` (403) | **No** reconnect loop: `AUTH_DIR` is wiped and a fresh QR is issued |
-| Process receives `SIGTERM`/`SIGINT` | HTTP server drains, queued sends are rejected, socket closes |
-
-`unhandledRejection` and `uncaughtException` are both trapped and logged, so a
-dropped socket or a dead webhook receiver cannot take the process down.
-
----
-
-## Project layout
-
-```
-index.js              boot, signal handling, process-level error traps
-src/config.js         env parsing and validation (fails fast at startup)
-src/logger.js         pino logger + the child logger handed to Baileys
-src/whatsapp.js       socket lifecycle, QR, reconnect, send/check/logout
-src/server.js         Express app, auth middleware, routes, error handler
-src/jid.js            loose number -> JID normalisation
-src/validate.js       body validation and media content building
-src/queue.js          serial send queue with a minimum delay
-src/webhook.js        webhook delivery with bounded retries
-src/messages.js       inbound filtering and payload extraction
-src/errors.js         ApiError -> HTTP status mapping
-test/                 five suites, run with npm test
-src/tokens.js         device tokens, hashed at rest, atomic serialised writes
-src/pairing.js        the Link WhatsApp claim flow
-public/index.html     the browser console (no build step, no secrets)
-```
+See **[DEPLOY.md](DEPLOY.md)**. The short version: this is stateful and
+always-on, so it needs a persistent disk, exactly one instance, and no
+scale-to-zero. That rules out Vercel, Netlify, Workers and Lambda, and most free
+tiers. [render.yaml](render.yaml) and [fly.toml](fly.toml) are pre-configured.
 
 ## Tests
 
@@ -567,24 +280,57 @@ public/index.html     the browser console (no build step, no secrets)
 npm test
 ```
 
-124 checks across five suites, no test framework and no network access
-required — everything runs against a stubbed Baileys client and local HTTP
-servers:
+127 checks across three suites, no framework and no network — Supabase and
+Baileys are both injected as fakes:
 
 | Suite | Covers |
 | --- | --- |
-| `test/http.test.mjs` | Every route: auth, validation rejections, status codes, error shape |
-| `test/messages.test.mjs` | Webhook retry/backoff behaviour, inbound filtering, payload extraction |
-| `test/pairing.test.mjs` | The link flow end to end: claim, QR, one-time token, revocation |
-| `test/tokens.test.mjs` | Token store under concurrency, hashing at rest, the loopback pairing gate |
-| `test/page.test.mjs` | Console page: script parses, every element id resolves, docs match the routes |
+| `test/api.test.mjs` | Auth, **tenant isolation**, admin gating, self-lockout guards, opt-out enforcement, validation |
+| `test/messages.test.mjs` | Webhook retry/backoff, inbound filtering, payload extraction |
+| `test/page.test.mjs` | Both dashboards: scripts parse, every element id resolves, no secret literals, every `api()` call maps to a real route |
 
-Two of those are worth calling out: `page.test.mjs` fails if an endpoint exists
-in `server.js` but not in the in-page docs (or vice versa), so the reference
-cannot drift; and `tokens.test.mjs` fires 25 concurrent mints against a racing
-revoke, which is how the token-store write race was found.
+Two are worth calling out. `api.test.mjs` asserts that **every data call carries
+a user id** and that no route accepts one from the caller — that is the whole
+tenant boundary. `page.test.mjs` fails if a dashboard calls an endpoint the
+server does not define, so a dead button cannot ship.
 
----
+## Baileys v7 notes
+
+v7 changed things most tutorials still get wrong:
+
+| Older pattern | v7 |
+| --- | --- |
+| `@whiskeysockets/baileys` | package is now **`baileys`** |
+| CommonJS `require()` | **ESM-only** (`"type": "module"`) |
+| `printQRInTerminal: true` | **removed** — read `qr` off `connection.update` yourself |
+| `makeInMemoryStore` | gone; keep your own state |
+| `node-cache` | ships `@cacheable/node-cache` |
+| Node 16/18 | **Node 20+**, enforced by a preinstall check |
+
+## Project layout
+
+```
+index.js                boot, signals, session restore after restart
+src/config.js           env parsing, fails fast at startup
+src/supabase.js         service-role client: identity, keys, CRM, admin queries
+src/auth.js             session-or-API-key authentication, admin gating
+src/tenants.js          one Baileys socket per client, with eviction
+src/whatsapp.js         a single WhatsApp connection (instantiated per tenant)
+src/routes-client.js    everything a client can do with their own account
+src/routes-admin.js     service management
+src/server.js           Express wiring, static dashboards, error shape
+src/queue.js            per-tenant serial send queue
+src/jid.js              loose number -> JID normalisation
+src/validate.js         body validation, media content building
+src/messages.js         inbound filtering and payload extraction
+src/webhook.js          webhook delivery with bounded retries
+src/errors.js           ApiError -> HTTP status mapping
+public/index.html       landing page
+public/app/             client dashboard
+public/admin/           admin dashboard
+public/shared.{css,js}  design system + Supabase auth over plain fetch
+supabase/migrations/    the database schema
+```
 
 ## Status codes
 
@@ -592,13 +338,14 @@ revoke, which is how the token-store write race was found.
 | --- | --- |
 | `200` / `202` | OK / send queued |
 | `400 bad_request` | Malformed JSON, missing field, bad number or URL |
-| `401 unauthorized` | Missing or wrong `x-api-key` |
-| `404 not_found` | No such route |
-| `404 recipient_not_found` | Recipient not reachable on WhatsApp, often a missing country code |
-| `409 conflict` | `GET /qr` or `POST /pair/start` while already linked |
-| `502 upstream_error` | WhatsApp did not acknowledge the message |
-| `503 service_unavailable` | Not connected, no QR yet, or send queue full |
-| `500 internal_error` | Anything unexpected (details are logged, not returned) |
+| `401 unauthorized` | Missing, invalid or expired credential |
+| `403 forbidden` | Authenticated but not permitted (non-admin, API key on an admin route, opted-out recipient) |
+| `404 not_found` | No such route or record |
+| `404 recipient_not_found` | Recipient not reachable on WhatsApp |
+| `409 conflict` | Already linked, or a guarded admin action |
+| `502 upstream_error` | WhatsApp or Supabase did not cooperate |
+| `503 service_unavailable` | Not linked, no QR yet, queue full, or Supabase unconfigured |
+| `500 internal_error` | Unexpected. Logged, never returned |
 
 ## License
 

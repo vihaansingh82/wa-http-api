@@ -22,13 +22,6 @@ const bool = (name, fallback) => {
   return ['1', 'true', 'yes', 'on'].includes(raw.toLowerCase())
 }
 
-const apiKey = str('API_KEY', '')
-if (!apiKey) {
-  throw new Error('API_KEY is required. Copy .env.example to .env and set a long random value.')
-}
-if (apiKey.length < 16) {
-  throw new Error('API_KEY must be at least 16 characters.')
-}
 
 const webhookUrl = str('WEBHOOK_URL', '')
 if (webhookUrl) {
@@ -41,26 +34,23 @@ if (webhookUrl) {
 export const config = {
   port: int('PORT', 3000, { min: 1, max: 65535 }),
   host: str('HOST', '0.0.0.0'),
-  apiKey,
   authDir: path.resolve(str('AUTH_DIR', './auth')),
   sessionName: str('SESSION_NAME', 'wa-http-api'),
-  // Device tokens minted by the browser pairing flow (stored hashed).
-  tokenStore: path.resolve(str('TOKEN_STORE', './data/tokens.json')),
-  // Also DM the new token to the linked account, so it lands on the phone.
-  sendTokenToPhone: bool('SEND_TOKEN_TO_PHONE', true),
-  // How long a "Link WhatsApp" attempt stays claimable.
-  pairClaimTtlMs: int('PAIR_CLAIM_TTL_MS', 600000, { min: 30000, max: 3600000 }),
-  // Treat a direct loopback connection as the operator being at the machine.
-  // Set false when this sits behind a proxy or tunnel that you do not control,
-  // as a belt-and-braces measure on top of the forwarded-header detection.
-  trustLoopbackPairing: bool('TRUST_LOOPBACK_PAIRING', true),
+  // ---- Supabase: auth + all tenant data ----
+  supabaseUrl: str('SUPABASE_URL', ''),
+  // Safe to serve to the browser; it is the key the dashboards sign in with.
+  supabasePublishableKey: str('SUPABASE_PUBLISHABLE_KEY', ''),
+  // Server-only. Bypasses RLS, so it must never reach the browser.
+  supabaseServiceKey: str('SUPABASE_SERVICE_ROLE_KEY', ''),
+  // Where password-reset and confirmation links send people back to.
+  publicUrl: str('PUBLIC_URL', ''),
+  // Cap on simultaneous WhatsApp sockets; each one is a live connection and
+  // several hundred MB of headroom between them.
+  maxTenantSessions: int('MAX_TENANT_SESSIONS', 25, { min: 1, max: 500 }),
   // Resolve every recipient through onWhatsApp before sending. Without this a
   // number missing its country code produces a valid-looking JID that belongs
   // to nobody: WhatsApp accepts the message and silently drops it.
   verifyRecipient: bool('VERIFY_RECIPIENT', true),
-  // Allow starting a pairing from a non-loopback address without the admin key.
-  // Off by default: it would let anyone who can reach the port open a pairing.
-  allowRemotePairing: bool('ALLOW_REMOTE_PAIRING', false),
   sendDelayMs: int('SEND_DELAY_MS', 3000, { min: 0, max: 600000 }),
   maxQueueSize: int('MAX_QUEUE_SIZE', 500, { min: 1, max: 100000 }),
   webhookUrl,

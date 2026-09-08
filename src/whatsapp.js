@@ -11,7 +11,7 @@ import NodeCache from '@cacheable/node-cache'
 import qrcodeTerminal from 'qrcode-terminal'
 import QRCode from 'qrcode'
 import { config } from './config.js'
-import { logger, baileysLogger } from './logger.js'
+import { logger as baseLogger, baileysLogger } from './logger.js'
 import { ApiError } from './errors.js'
 import { createSendQueue } from './queue.js'
 import { createWebhookSender } from './webhook.js'
@@ -30,7 +30,19 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 const isSessionDead = statusCode =>
   statusCode === DisconnectReason.loggedOut || statusCode === DisconnectReason.forbidden
 
-export function createWhatsAppClient({ onConnected } = {}) {
+/**
+ * One WhatsApp connection. Instantiate it per tenant with its own authDir --
+ * the auth folder IS the session, so two tenants sharing one would fight over
+ * the same credentials.
+ */
+export function createWhatsAppClient({
+  authDir = config.authDir,
+  label = 'default',
+  onConnected,
+  onStateChange,
+  onMessage
+} = {}) {
+  const logger = baseLogger.child({ tenant: label })
   const queue = createSendQueue({
     minDelayMs: config.sendDelayMs,
     maxSize: config.maxQueueSize,
@@ -82,11 +94,41 @@ export function createWhatsAppClient({ onConnected } = {}) {
     }
   }
 
+  /**
+   * The coarse state the dashboards and database care about, as opposed to the
+   * raw socket state. Kept separate so a UI never has to reason about
+   * Baileys internals.
+   */
+  function publicState() {
+    if (connectionState === 'open') return 'connected'
+    if (qrDataUrl) return 'awaiting_scan'
+    if (connectionState === 'connecting') return 'connecting'
+    if (lastDisconnect?.reason === 'loggedOut') return 'logged_out'
+    if (lastDisconnect) return 'error'
+    return 'idle'
+  }
+
+  /** Tell the owner something changed. Never allowed to throw into the socket. */
+  function publishState() {
+    if (!onStateChange) return
+    Promise.resolve(
+      onStateChange({
+        state: publicState(),
+        connection: connectionState,
+        user: sock?.user ? { id: sock.user.id, name: sock.user.name ?? null } : null,
+        hasQr: Boolean(qrDataUrl),
+        qrGeneratedAt,
+        lastDisconnect
+      })
+    ).catch(err => logger.error({ err }, 'onStateChange hook failed'))
+  }
+
   async function setQr(next) {
     qr = next ?? null
     qrGeneratedAt = next ? new Date().toISOString() : null
     if (!next) {
       qrDataUrl = null
+      publishState()
       return
     }
     qrcodeTerminal.generate(next, { small: true })
@@ -97,11 +139,12 @@ export function createWhatsAppClient({ onConnected } = {}) {
       qrDataUrl = null
       logger.error({ err }, 'failed to render QR as a data URL')
     }
+    publishState()
   }
 
   async function clearAuthState() {
-    logger.warn({ authDir: config.authDir }, 'clearing auth state')
-    await rm(config.authDir, { recursive: true, force: true })
+    logger.warn({ authDir }, 'clearing auth state')
+    await rm(authDir, { recursive: true, force: true })
   }
 
   /**
@@ -148,6 +191,7 @@ export function createWhatsAppClient({ onConnected } = {}) {
     if (connection) {
       connectionState = connection
       logger.info({ connection }, 'connection state changed')
+      publishState()
     }
 
     if (connection === 'open') {
@@ -177,6 +221,7 @@ export function createWhatsAppClient({ onConnected } = {}) {
       message: error?.message ?? null
     }
     logger.warn({ ...lastDisconnect }, 'connection closed')
+    publishState()
 
     teardownSocket()
     if (stopped) return
@@ -213,6 +258,13 @@ export function createWhatsAppClient({ onConnected } = {}) {
         'incoming message'
       )
 
+      if (onMessage) {
+        // Persistence must not be able to stall or break the event stream.
+        Promise.resolve(onMessage(payload, msg)).catch(err =>
+          logger.error({ err }, 'onMessage hook failed')
+        )
+      }
+
       if (!webhook.enabled) continue
       // Not awaited on purpose: a slow receiver must not stall the event stream.
       webhook.deliver(payload).catch(err => logger.error({ err }, 'webhook sender threw'))
@@ -223,7 +275,7 @@ export function createWhatsAppClient({ onConnected } = {}) {
     if (starting || stopped) return
     starting = true
     try {
-      const { state, saveCreds } = await useMultiFileAuthState(config.authDir)
+      const { state, saveCreds } = await useMultiFileAuthState(authDir)
 
       if (!waVersion) {
         const { version, isLatest } = await fetchLatestBaileysVersion()
@@ -360,8 +412,13 @@ export function createWhatsAppClient({ onConnected } = {}) {
       return connectionState
     },
 
+    get state() {
+      return publicState()
+    },
+
     status() {
       return {
+        state: publicState(),
         connection: connectionState,
         connected: isConnected(),
         user: sock?.user ? { id: sock.user.id, name: sock.user.name ?? null } : null,
@@ -391,7 +448,7 @@ export function createWhatsAppClient({ onConnected } = {}) {
       return enqueueSend(jid, { text: message }, 'text')
     },
 
-    /** Message the linked account itself -- used to deliver the device token. */
+    /** Message the linked account itself. Handy for a self-test that bothers nobody. */
     sendToSelf(message) {
       const me = sock?.user?.id
       if (!me) throw ApiError.unavailable('Not connected, so there is no own JID to send to.')

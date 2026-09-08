@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WhatsApp API — Admin</title>
+<link rel="stylesheet" href="/shared.css" />
+</head>
+<body>
+
+<section id="gate" class="narrow" hidden>
+  <div class="card">
+    <h1 style="margin-bottom:6px">Admin</h1>
+    <p class="hint" id="gateMsg">Checking your account…</p>
+    <div class="actions">
+      <button class="ghost" id="toApp">Go to the client dashboard</button>
+    </div>
+  </div>
+</section>
+
+<section id="dash" class="wrap" hidden>
+  <header class="top">
+    <h1>Admin <span class="sub" id="whoami"></span></h1>
+    <div class="row" style="flex:0 0 auto">
+      <span class="pill"><span class="dot" id="dot"></span><span id="procText">—</span></span>
+      <button class="ghost mini" id="appLink">Client view</button>
+      <button class="ghost mini" id="doSignout">Sign out</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tabOverview" aria-selected="true">Overview</button>
+    <button role="tab" id="tabAccounts" aria-selected="false">Accounts</button>
+    <button role="tab" id="tabSessions" aria-selected="false">Sessions</button>
+    <button role="tab" id="tabAudit" aria-selected="false">Audit</button>
+  </nav>
+
+  <div id="paneOverview">
+    <div class="grid">
+      <div class="card span">
+        <h2>Service activity, last 14 days</h2>
+        <div class="kpis" id="kpis"></div>
+        <div id="chart"></div>
+      </div>
+      <div class="card">
+        <h2>Accounts</h2>
+        <div id="accountStats"></div>
+      </div>
+      <div class="card">
+        <h2>Sessions</h2>
+        <div id="sessionStats"></div>
+      </div>
+      <div class="card">
+        <h2>This process</h2>
+        <div id="procStats"></div>
+        <p class="note">
+          Live sessions are sockets running in this process. The stored state can
+          disagree after a restart until each one reconnects.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div id="paneAccounts" hidden>
+    <div class="card span">
+      <div class="spread">
+        <h2 style="margin:0">Accounts</h2>
+        <button class="mini" id="refreshAccounts">Refresh</button>
+      </div>
+      <div class="scroll-x"><table id="accountsTable"></table></div>
+      <pre class="out" id="accountsOut"></pre>
+    </div>
+  </div>
+
+  <div id="paneSessions" hidden>
+    <div class="card span">
+      <div class="spread">
+        <h2 style="margin:0">WhatsApp sessions</h2>
+        <button class="mini" id="refreshSessions">Refresh</button>
+      </div>
+      <div class="scroll-x"><table id="sessionsTable"></table></div>
+      <pre class="out" id="sessionsOut"></pre>
+    </div>
+  </div>
+
+  <div id="paneAudit" hidden>
+    <div class="card span">
+      <div class="spread">
+        <h2 style="margin:0">Audit log</h2>
+        <button class="mini" id="refreshAudit">Refresh</button>
+      </div>
+      <div class="scroll-x"><table id="auditTable"></table></div>
+    </div>
+  </div>
+</section>
+
+<script type="module">
+import { $, el, api, busy, show, drawBars, fmtWhen, loadConfig, signedIn, signOut } from '/shared.js'
+
+let me = null
+let pollTimer = null
+
+const TABS = { tabOverview: 'paneOverview', tabAccounts: 'paneAccounts', tabSessions: 'paneSessions', tabAudit: 'paneAudit' }
+function tab(which) {
+  for (const [button, pane] of Object.entries(TABS)) {
+    $(button).setAttribute('aria-selected', String(button === which))
+    $(pane).hidden = button !== which
+  }
+  if (which === 'tabOverview') loadOverview()
+  if (which === 'tabAccounts') loadAccounts()
+  if (which === 'tabSessions') loadSessions()
+  if (which === 'tabAudit') loadAudit()
+}
+for (const button of Object.keys(TABS)) $(button).onclick = () => tab(button)
+
+$('appLink').onclick = () => (location.href = '/app/')
+$('toApp').onclick = () => (location.href = '/app/')
+$('doSignout').onclick = async () => {
+  clearInterval(pollTimer)
+  await signOut()
+  location.href = '/app/'
+}
+
+const statRows = (host, rows) =>
+  $(host).replaceChildren(
+    ...rows.map(([k, v]) => el('div', { className: 'stat' }, el('span', {}, k), el('span', {}, String(v))))
+  )
+
+// ---------------------------------------------------------------- overview ---
+async function loadOverview() {
+  const { ok, body } = await api('/admin/overview')
+  if (!ok) return
+  const totals = body.usage.reduce(
+    (acc, row) => ({ sent: acc.sent + row.sent, received: acc.received + row.received, failed: acc.failed + row.failed }),
+    { sent: 0, received: 0, failed: 0 }
+  )
+  $('kpis').replaceChildren(
+    ...[
+      ['sent', totals.sent], ['received', totals.received], ['failed', totals.failed],
+      ['contacts', body.contacts], ['messages', body.messages]
+    ].map(([label, n]) =>
+      el('div', { className: 'kpi' }, el('div', { className: 'n' }, String(n)), el('div', { className: 'l' }, label))
+    )
+  )
+  drawBars($('chart'), body.usage, row => row.sent + row.received)
+
+  statRows('accountStats', [
+    ['total', body.accounts.total], ['clients', body.accounts.clients],
+    ['admins', body.accounts.admins], ['suspended', body.accounts.suspended]
+  ])
+  statRows('sessionStats', [
+    ['records', body.sessions.total],
+    ...Object.entries(body.sessions.byState)
+  ])
+  statRows('procStats', [
+    ['live sessions', body.process.liveSessions],
+    ['uptime (s)', body.process.uptimeSeconds],
+    ['memory (MB)', body.process.rssMb]
+  ])
+
+  $('procText').textContent = `${body.process.liveSessions} live · ${body.process.rssMb} MB`
+  $('dot').className = 'dot ' + (body.process.liveSessions > 0 ? 'ok' : '')
+}
+
+// ---------------------------------------------------------------- accounts ---
+async function loadAccounts() {
+  const { ok, body } = await api('/admin/accounts')
+  if (!ok) return show('accountsOut', body, false)
+
+  const table = $('accountsTable')
+  table.replaceChildren(
+    el('thead', {}, el('tr', {},
+      el('th', {}, 'Email'), el('th', {}, 'Name'), el('th', {}, 'Company'),
+      el('th', {}, 'Role'), el('th', {}, 'Status'), el('th', {}, 'WhatsApp'),
+      el('th', {}, 'Joined'), el('th', {}, 'Actions')
+    )),
+    el('tbody', {}, ...body.map(row => {
+      const isSelf = row.id === me.id
+
+      const promote = el('button', { className: 'mini' }, row.role === 'admin' ? 'Make client' : 'Make admin')
+      promote.disabled = isSelf
+      promote.title = isSelf ? 'You cannot change your own role' : ''
+      promote.onclick = () => patchAccount(row.id, { role: row.role === 'admin' ? 'client' : 'admin' })
+
+      const suspend = el('button', { className: 'mini' }, row.status === 'suspended' ? 'Reinstate' : 'Suspend')
+      suspend.disabled = isSelf
+      suspend.onclick = () => patchAccount(row.id, { status: row.status === 'suspended' ? 'active' : 'suspended' })
+
+      const remove = el('button', { className: 'mini' }, 'Delete')
+      remove.disabled = isSelf
+      remove.onclick = async () => {
+        if (!confirm(`Delete ${row.email}? Their WhatsApp session, contacts and messages all go with it. This cannot be undone.`)) return
+        const result = await api('/admin/accounts/' + row.id, { method: 'DELETE' })
+        show('accountsOut', result.body, result.ok)
+        loadAccounts()
+      }
+
+      const wa = row.session
+        ? el('span', { className: 'tag ' + (row.session.state === 'connected' ? 'ok' : row.session.state === 'error' ? 'bad' : '') },
+            row.session.state + (row.liveInProcess ? ' · live' : ''))
+        : el('span', { className: 'tag' }, 'never linked')
+
+      return el('tr', {},
+        el('td', { className: 'mono' }, row.email),
+        el('td', {}, row.full_name || '—'),
+        el('td', {}, row.company || '—'),
+        el('td', {}, el('span', { className: 'tag ' + (row.role === 'admin' ? 'info' : '') }, row.role)),
+        el('td', {}, el('span', { className: 'tag ' + (row.status === 'active' ? 'ok' : 'bad') }, row.status)),
+        el('td', {}, wa),
+        el('td', { className: 'mono' }, fmtWhen(row.created_at)),
+        el('td', {}, el('div', { className: 'row', style: 'flex-wrap:nowrap' }, promote, suspend, remove))
+      )
+    }))
+  )
+}
+
+async function patchAccount(id, patch) {
+  const { ok, body } = await api('/admin/accounts/' + id, { method: 'PATCH', body: patch })
+  show('accountsOut', ok ? { updated: true, ...patch } : body, ok)
+  loadAccounts()
+}
+$('refreshAccounts').onclick = () => loadAccounts()
+
+// ---------------------------------------------------------------- sessions ---
+async function loadSessions() {
+  const { ok, body } = await api('/admin/sessions')
+  if (!ok) return show('sessionsOut', body, false)
+
+  const liveById = new Map(body.live.map(entry => [entry.userId, entry]))
+  const table = $('sessionsTable')
+
+  if (!body.stored.length) {
+    table.replaceChildren(el('tbody', {}, el('tr', {}, el('td', {}, el('div', { className: 'empty' }, 'No client has linked a WhatsApp session yet.')))))
+    return
+  }
+
+  table.replaceChildren(
+    el('thead', {}, el('tr', {},
+      el('th', {}, 'Client'), el('th', {}, 'State'), el('th', {}, 'WhatsApp'),
+      el('th', {}, 'Queued'), el('th', {}, 'Last connected'), el('th', {}, 'Error'), el('th', {}, 'Actions')
+    )),
+    el('tbody', {}, ...body.stored.map(row => {
+      const live = liveById.get(row.userId)
+      const stop = el('button', { className: 'mini' }, 'Stop')
+      stop.disabled = !live
+      stop.onclick = async () => {
+        const result = await api('/admin/sessions/' + row.userId + '/stop', { method: 'POST' })
+        show('sessionsOut', result.body, result.ok)
+        loadSessions()
+      }
+      const start = el('button', { className: 'mini' }, 'Start')
+      start.disabled = Boolean(live)
+      start.onclick = async () => {
+        const result = await api('/admin/sessions/' + row.userId + '/start', { method: 'POST' })
+        show('sessionsOut', result.body, result.ok)
+        loadSessions()
+      }
+      return el('tr', {},
+        el('td', { className: 'mono' }, row.email ?? row.userId),
+        el('td', {}, el('span', { className: 'tag ' + (live?.connected ? 'ok' : row.state === 'error' ? 'bad' : '') },
+          (live?.state ?? row.state) + (live ? ' · live' : ''))),
+        el('td', { className: 'mono' }, row.waName ? `${row.waName} (${row.waJid})` : (row.waJid ?? '—')),
+        el('td', { className: 'mono' }, String(live?.queued ?? 0)),
+        el('td', { className: 'mono' }, fmtWhen(row.lastConnectedAt)),
+        el('td', {}, row.lastError ? el('span', { className: 'tag bad' }, String(row.lastError).slice(0, 40)) : '—'),
+        el('td', {}, el('div', { className: 'row', style: 'flex-wrap:nowrap' }, start, stop))
+      )
+    }))
+  )
+}
+$('refreshSessions').onclick = () => loadSessions()
+
+// ------------------------------------------------------------------- audit ---
+async function loadAudit() {
+  const { ok, body } = await api('/admin/audit?limit=200')
+  if (!ok) return
+  const table = $('auditTable')
+  if (!body.length) {
+    table.replaceChildren(el('tbody', {}, el('tr', {}, el('td', {}, el('div', { className: 'empty' }, 'Nothing logged yet.')))))
+    return
+  }
+  table.replaceChildren(
+    el('thead', {}, el('tr', {}, el('th', {}, 'When'), el('th', {}, 'Action'), el('th', {}, 'Actor'), el('th', {}, 'Detail'))),
+    el('tbody', {}, ...body.map(row =>
+      el('tr', {},
+        el('td', { className: 'mono' }, new Date(row.at).toLocaleString()),
+        el('td', {}, el('span', { className: 'tag' }, row.action)),
+        el('td', { className: 'mono' }, row.actor ?? '—'),
+        el('td', { className: 'mono' }, row.detail ? JSON.stringify(row.detail) : '—')
+      )
+    ))
+  )
+}
+$('refreshAudit').onclick = () => loadAudit()
+
+// -------------------------------------------------------------------- boot ---
+async function boot() {
+  const conf = await loadConfig()
+  if (!conf.configured) {
+    $('gate').hidden = false
+    $('gateMsg').textContent = 'This server has no Supabase configuration, so there are no accounts to manage.'
+    return
+  }
+  if (!signedIn()) {
+    $('gate').hidden = false
+    $('gateMsg').textContent = 'Sign in on the client dashboard first, with an admin account.'
+    return
+  }
+
+  const { ok, body } = await api('/me')
+  if (!ok) {
+    $('gate').hidden = false
+    $('gateMsg').textContent = body.message ?? 'Could not verify your account.'
+    return
+  }
+  if (body.role !== 'admin') {
+    // The API would refuse anyway; this just explains it rather than showing a
+    // dashboard full of failed requests.
+    $('gate').hidden = false
+    $('gateMsg').textContent = `${body.email} is a client account. Admin access is required here.`
+    return
+  }
+
+  me = body
+  $('gate').hidden = true
+  $('dash').hidden = false
+  $('whoami').textContent = me.email
+  tab('tabOverview')
+  clearInterval(pollTimer)
+  pollTimer = setInterval(() => {
+    if (!$('paneOverview').hidden) loadOverview()
+  }, 8000)
+}
+
+boot()
+</script>
+</body>
+</html>

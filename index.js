@@ -1,9 +1,8 @@
 import { config } from './src/config.js'
 import { logger } from './src/logger.js'
-import { createWhatsAppClient } from './src/whatsapp.js'
 import { createServer } from './src/server.js'
-import { createTokenStore } from './src/tokens.js'
-import { createPairingFlow } from './src/pairing.js'
+import { createTenantManager } from './src/tenants.js'
+import { supabaseConfigured } from './src/supabase.js'
 
 // A dropped WhatsApp socket or a dead webhook receiver must never take the
 // process down, so nothing is left to Node's default crash-on-rejection.
@@ -16,34 +15,28 @@ process.on('uncaughtException', err => {
   shutdown('uncaughtException', 1)
 })
 
-const tokens = createTokenStore(config.tokenStore)
-await tokens.load()
-
-// The client needs the pairing flow to react to 'open', and the flow needs the
-// client to read the QR and DM the token -- so the hook is wired in after both
-// exist, via a late-bound reference.
-let pairing
-const client = createWhatsAppClient({ onConnected: user => pairing?.onConnected(user) })
-
-pairing = createPairingFlow({
-  client,
-  tokens,
-  ttlMs: config.pairClaimTtlMs,
-  deliverToPhone: config.sendTokenToPhone
-})
-
-const app = createServer(client, { tokens, pairing })
+const tenants = createTenantManager()
+const app = createServer(tenants)
 
 const server = app.listen(config.port, config.host, () => {
   logger.info(
     {
       url: `http://${config.host}:${config.port}`,
+      clientDashboard: '/app',
+      adminDashboard: '/admin',
       authDir: config.authDir,
-      sendDelayMs: config.sendDelayMs,
-      webhook: config.webhookUrl || '(disabled)'
+      maxTenantSessions: config.maxTenantSessions,
+      supabase: supabaseConfigured ? config.supabaseUrl : '(not configured)'
     },
     'HTTP API listening'
   )
+
+  if (!supabaseConfigured) {
+    logger.warn(
+      'Supabase is not configured, so nobody can sign in. Set SUPABASE_URL, ' +
+        'SUPABASE_PUBLISHABLE_KEY and SUPABASE_SERVICE_ROLE_KEY, then restart.'
+    )
+  }
 })
 
 let shuttingDown = false
@@ -55,13 +48,13 @@ function shutdown(signal, code = 0) {
 
   const done = () => process.exit(code)
   // Do not hang forever on a lingering keep-alive connection.
-  const force = setTimeout(done, 10000)
+  const force = setTimeout(done, 15000)
   force.unref()
 
   server.close(() => {
-    client
-      .stop()
-      .catch(err => logger.error({ err }, 'error while stopping the WhatsApp client'))
+    tenants
+      .stopAll()
+      .catch(err => logger.error({ err }, 'error while stopping tenant sessions'))
       .finally(done)
   })
 }
@@ -70,4 +63,9 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => shutdown(signal))
 }
 
-await client.start()
+// Bring back the sessions that were connected before this process started, so a
+// restart or deploy does not silently leave every client offline.
+if (supabaseConfigured) {
+  const { restored } = await tenants.restorePreviouslyConnected()
+  if (restored) logger.info({ restored }, 'sessions restored after start')
+}

@@ -33,16 +33,24 @@ services:
 
     envVars:
       - key: NODE_VERSION
-        value: "20"
-      # Both of these must sit on the disk, or a redeploy loses the session.
+        value: "22"
+      # WhatsApp credentials must sit on the disk, or a redeploy loses every
+      # client's session and they all have to re-scan.
       - key: AUTH_DIR
         value: /var/data/auth
-      - key: TOKEN_STORE
-        value: /var/data/tokens.json
-      # Render generates this on the first deploy. Read it from the dashboard
-      # under Environment -- you need it once, to link your phone.
-      - key: API_KEY
-        generateValue: true
+      # Supabase holds accounts, contacts and messages. All three are required,
+      # and all three are set in the dashboard rather than committed here --
+      # sync:false means "prompt me, do not store it in git".
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      # service_role key: bypasses row-level security, so it is a real secret.
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # Public origin, used for password-reset and confirmation redirects.
+      - key: PUBLIC_URL
+        sync: false
       - key: LOG_PRETTY
         value: "false"
       - key: SEND_DELAY_MS

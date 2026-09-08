@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WhatsApp API — Dashboard</title>
+<link rel="stylesheet" href="/shared.css" />
+</head>
+<body>
+
+<!-- ============================== AUTH ============================== -->
+<section id="authScreen" class="narrow" hidden>
+  <div class="card">
+    <h1 style="margin-bottom:6px">WhatsApp API</h1>
+    <p class="hint" id="authBlurb">Sign in to link your WhatsApp and get your API key.</p>
+
+    <!-- sign in -->
+    <div id="paneSignin">
+      <label for="siEmail">Email</label>
+      <input id="siEmail" type="email" autocomplete="username" placeholder="you@company.com" />
+      <label for="siPass">Password</label>
+      <input id="siPass" type="password" autocomplete="current-password" />
+      <div class="actions"><button class="big" id="doSignin">Sign in</button></div>
+      <p class="note">
+        <button class="link" id="goSignup">Create an account</button> ·
+        <button class="link" id="goForgot">Forgot password?</button>
+      </p>
+    </div>
+
+    <!-- sign up -->
+    <div id="paneSignup" hidden>
+      <label for="suName">Your name</label>
+      <input id="suName" autocomplete="name" placeholder="Asha Sharma" />
+      <label for="suCompany">Company <span class="hint">optional</span></label>
+      <input id="suCompany" autocomplete="organization" placeholder="Acme Sales" />
+      <label for="suEmail">Email</label>
+      <input id="suEmail" type="email" autocomplete="username" placeholder="you@company.com" />
+      <label for="suPass">Password <span class="hint">at least 8 characters</span></label>
+      <input id="suPass" type="password" autocomplete="new-password" />
+      <div class="actions"><button class="big" id="doSignup">Create account</button></div>
+      <p class="note"><button class="link" id="backToSignin1">Back to sign in</button></p>
+    </div>
+
+    <!-- forgot -->
+    <div id="paneForgot" hidden>
+      <p class="hint">We will email you a link to choose a new password.</p>
+      <label for="fpEmail">Email</label>
+      <input id="fpEmail" type="email" autocomplete="username" placeholder="you@company.com" />
+      <div class="actions"><button class="big" id="doForgot">Send reset link</button></div>
+      <p class="note"><button class="link" id="backToSignin2">Back to sign in</button></p>
+    </div>
+
+    <!-- new password, from a recovery link -->
+    <div id="paneReset" hidden>
+      <p class="hint">Choose a new password for your account.</p>
+      <label for="rpPass">New password</label>
+      <input id="rpPass" type="password" autocomplete="new-password" />
+      <label for="rpPass2">Repeat it</label>
+      <input id="rpPass2" type="password" autocomplete="new-password" />
+      <div class="actions"><button class="big" id="doReset">Set password</button></div>
+    </div>
+
+    <pre class="out" id="authOut"></pre>
+  </div>
+</section>
+
+<!-- ============================ DASHBOARD =========================== -->
+<section id="dash" class="wrap" hidden>
+  <header class="top">
+    <h1>WhatsApp API <span class="sub" id="whoami"></span></h1>
+    <div class="row" style="flex:0 0 auto">
+      <span class="pill"><span class="dot" id="dot"></span><span id="stateText">checking…</span></span>
+      <button class="ghost mini" id="adminLink" hidden>Admin</button>
+      <button class="ghost mini" id="doSignout">Sign out</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tabOverview" aria-selected="true">Overview</button>
+    <button role="tab" id="tabLink" aria-selected="false">Link WhatsApp</button>
+    <button role="tab" id="tabInbox" aria-selected="false">Inbox</button>
+    <button role="tab" id="tabContacts" aria-selected="false">Contacts</button>
+    <button role="tab" id="tabSend" aria-selected="false">Send</button>
+    <button role="tab" id="tabKeys" aria-selected="false">API keys</button>
+  </nav>
+
+  <!-- overview -->
+  <div id="paneOverview">
+    <div class="grid">
+      <div class="card span">
+        <h2>Last 14 days</h2>
+        <div class="kpis" id="kpis"></div>
+        <div id="chart"></div>
+      </div>
+      <div class="card">
+        <h2>Connection</h2>
+        <div id="sessionBox"></div>
+        <div class="actions"><button class="ghost" id="refreshSession">Refresh</button></div>
+      </div>
+      <div class="card">
+        <h2>Your account</h2>
+        <label for="acName">Name</label>
+        <input id="acName" />
+        <label for="acCompany">Company</label>
+        <input id="acCompany" />
+        <div class="actions"><button id="saveAccount">Save</button></div>
+        <pre class="out" id="accountOut"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- link -->
+  <div id="paneLink" hidden>
+    <div class="card" style="text-align:center">
+      <h3 id="linkTitle">Link your WhatsApp</h3>
+      <p class="hint" style="max-width:44ch;margin:0 auto 16px">
+        Scan with your phone, exactly like WhatsApp Web. Your session stays linked
+        across restarts, so this is a one-time step.
+      </p>
+      <div class="qr-holder" id="qrHolder"></div>
+      <div class="actions" style="justify-content:center">
+        <button id="startLink">Show QR code</button>
+        <button class="danger" id="doLogoutWa" hidden>Unlink phone</button>
+      </div>
+      <ol class="steps">
+        <li>Open WhatsApp on your phone</li>
+        <li>Settings → <strong>Linked devices</strong></li>
+        <li>Tap <strong>Link a device</strong></li>
+        <li>Point it at the code above</li>
+      </ol>
+      <pre class="out" id="linkOut" style="text-align:left"></pre>
+    </div>
+  </div>
+
+  <!-- inbox -->
+  <div id="paneInbox" hidden>
+    <div class="inbox">
+      <div class="card" style="padding:0">
+        <div class="spread" style="padding:14px 16px 8px"><h2 style="margin:0">Conversations</h2>
+          <button class="mini" id="refreshInbox">Refresh</button></div>
+        <div class="threads" id="threads"></div>
+      </div>
+      <div class="card">
+        <div class="spread"><h2 style="margin:0" id="threadWho">Pick a conversation</h2></div>
+        <div class="messages" id="messages"></div>
+        <div class="row" style="margin-top:12px">
+          <input id="replyBody" placeholder="Type a reply…" style="flex:3 1 200px" />
+          <button id="doReply" style="flex:0 0 auto" disabled>Send</button>
+        </div>
+        <pre class="out" id="replyOut"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- contacts -->
+  <div id="paneContacts" hidden>
+    <div class="grid">
+      <div class="card span">
+        <div class="spread">
+          <h2 style="margin:0">Contacts</h2>
+          <div class="row" style="flex:0 0 auto">
+            <select id="filterStatus" style="width:auto">
+              <option value="">All statuses</option>
+              <option value="new">new</option>
+              <option value="open">open</option>
+              <option value="qualified">qualified</option>
+              <option value="won">won</option>
+              <option value="lost">lost</option>
+              <option value="customer">customer</option>
+            </select>
+            <button class="mini" id="refreshContacts">Refresh</button>
+          </div>
+        </div>
+        <div class="scroll-x"><table id="contactsTable"></table></div>
+      </div>
+      <div class="card span">
+        <h2>Add a contact</h2>
+        <div class="row">
+          <input id="ncNumber" placeholder="+91 98765 43210" style="flex:2 1 180px" />
+          <input id="ncName" placeholder="Name" style="flex:2 1 150px" />
+          <input id="ncConsent" placeholder="How did they opt in?" style="flex:3 1 200px" />
+          <button id="addContact" style="flex:0 0 auto">Add</button>
+        </div>
+        <p class="note">
+          Recording consent is not bureaucracy: messaging people who never asked is
+          the fastest way to get the number banned, and this is the field you will
+          want when someone complains.
+        </p>
+        <pre class="out" id="contactOut"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- send -->
+  <div id="paneSend" hidden>
+    <div class="grid">
+      <div class="card">
+        <h2>Send text</h2>
+        <label for="stTo">To <span class="hint">include the country code</span></label>
+        <input id="stTo" placeholder="+91 98765 43210" />
+        <label for="stBody">Message</label>
+        <textarea id="stBody" placeholder="Hello from the API"></textarea>
+        <div class="actions"><button id="doSendText">Send</button></div>
+        <pre class="out" id="sendTextOut"></pre>
+      </div>
+      <div class="card">
+        <h2>Send media</h2>
+        <label for="smTo">To</label>
+        <input id="smTo" placeholder="+91 98765 43210" />
+        <div class="row">
+          <div style="flex:0 0 120px">
+            <label for="smType">Type</label>
+            <select id="smType">
+              <option>image</option><option>video</option><option>document</option>
+            </select>
+          </div>
+          <div style="flex:2 1 200px">
+            <label for="smUrl">URL</label>
+            <input id="smUrl" placeholder="https://example.com/photo.jpg" />
+          </div>
+        </div>
+        <label for="smCaption">Caption <span class="hint">optional</span></label>
+        <input id="smCaption" />
+        <div class="actions"><button id="doSendMedia">Send</button></div>
+        <pre class="out" id="sendMediaOut"></pre>
+      </div>
+      <div class="card span">
+        <h2>Check a number</h2>
+        <div class="row">
+          <input id="ckNumber" placeholder="919876543210" style="flex:3 1 200px" />
+          <button id="doCheck" style="flex:0 0 auto">Check</button>
+        </div>
+        <pre class="out" id="checkOut"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- keys -->
+  <div id="paneKeys" hidden>
+    <div class="grid">
+      <div class="card span">
+        <div class="spread">
+          <h2 style="margin:0">API keys</h2>
+          <div class="row" style="flex:0 0 auto">
+            <input id="keyName" placeholder="Key name" style="flex:2 1 140px" />
+            <button id="createKey" style="flex:0 0 auto">New key</button>
+          </div>
+        </div>
+        <div id="newKeyBox"></div>
+        <div class="scroll-x"><table id="keysTable"></table></div>
+        <p class="note">
+          Keys are stored only as a SHA-256 hash, so the full value is shown once and
+          cannot be recovered. Send it as <code>x-api-key</code>.
+        </p>
+      </div>
+      <div class="card span">
+        <h2>Using the API</h2>
+        <pre id="curlExample"></pre>
+        <p class="note">Full endpoint list is in the project README.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script type="module">
+import {
+  $, el, api, busy, show, drawBars, fmtWhen,
+  loadConfig, signedIn, signIn, signUp, signOut,
+  requestPasswordReset, updatePassword, consumeAuthFragment
+} from '/shared.js'
+
+let me = null
+let recoveryToken = null
+let currentThread = null
+let pollTimer = null
+
+// ------------------------------------------------------------------- panes ---
+const AUTH_PANES = ['paneSignin', 'paneSignup', 'paneForgot', 'paneReset']
+const BLURBS = {
+  paneSignin: 'Sign in to link your WhatsApp and get your API key.',
+  paneSignup: 'Create an account. You link your WhatsApp on the next screen.',
+  paneForgot: 'Enter your email and we will send you a reset link.',
+  paneReset: 'Choose a new password to finish resetting your account.'
+}
+function authPane(name) {
+  for (const id of AUTH_PANES) $(id).hidden = id !== name
+  $('authBlurb').textContent = BLURBS[name] ?? ''
+  show('authOut', null)
+}
+
+const TABS = {
+  tabOverview: 'paneOverview', tabLink: 'paneLink', tabInbox: 'paneInbox',
+  tabContacts: 'paneContacts', tabSend: 'paneSend', tabKeys: 'paneKeys'
+}
+function tab(which) {
+  for (const [button, pane] of Object.entries(TABS)) {
+    $(button).setAttribute('aria-selected', String(button === which))
+    $(pane).hidden = button !== which
+  }
+  if (which === 'tabInbox') loadThreads()
+  if (which === 'tabContacts') loadContacts()
+  if (which === 'tabKeys') loadKeys()
+  if (which === 'tabOverview') loadUsage()
+  if (which === 'tabLink') refreshSession()
+}
+for (const button of Object.keys(TABS)) $(button).onclick = () => tab(button)
+
+// -------------------------------------------------------------------- auth ---
+$('goSignup').onclick = () => authPane('paneSignup')
+$('goForgot').onclick = () => authPane('paneForgot')
+$('backToSignin1').onclick = () => authPane('paneSignin')
+$('backToSignin2').onclick = () => authPane('paneSignin')
+
+$('doSignin').onclick = async e => {
+  busy(e.target, true)
+  try {
+    await signIn({ email: $('siEmail').value.trim(), password: $('siPass').value })
+    await enterDashboard()
+  } catch (err) {
+    show('authOut', err.message, false)
+  }
+  busy(e.target, false)
+}
+
+$('doSignup').onclick = async e => {
+  const password = $('suPass').value
+  if (password.length < 8) return show('authOut', 'Password must be at least 8 characters.', false)
+  busy(e.target, true)
+  try {
+    const { needsConfirmation } = await signUp({
+      email: $('suEmail').value.trim(),
+      password,
+      fullName: $('suName').value.trim(),
+      company: $('suCompany').value.trim()
+    })
+    if (needsConfirmation) {
+      authPane('paneSignin')
+      show('authOut', 'Account created. Check your email for the confirmation link, then sign in.', true)
+    } else {
+      await enterDashboard()
+    }
+  } catch (err) {
+    show('authOut', err.message, false)
+  }
+  busy(e.target, false)
+}
+
+$('doForgot').onclick = async e => {
+  busy(e.target, true)
+  try {
+    await requestPasswordReset($('fpEmail').value.trim())
+    // Same message either way, so this cannot be used to discover which
+    // addresses have accounts.
+    show('authOut', 'If that address has an account, a reset link is on its way.', true)
+  } catch (err) {
+    show('authOut', err.message, false)
+  }
+  busy(e.target, false)
+}
+
+$('doReset').onclick = async e => {
+  const password = $('rpPass').value
+  if (password.length < 8) return show('authOut', 'Password must be at least 8 characters.', false)
+  if (password !== $('rpPass2').value) return show('authOut', 'The two passwords do not match.', false)
+  busy(e.target, true)
+  try {
+    await updatePassword(password, recoveryToken)
+    recoveryToken = null
+    authPane('paneSignin')
+    show('authOut', 'Password updated. Sign in with it now.', true)
+  } catch (err) {
+    show('authOut', err.message, false)
+  }
+  busy(e.target, false)
+}
+
+$('doSignout').onclick = async () => {
+  clearInterval(pollTimer)
+  await signOut()
+  location.reload()
+}
+
+$('adminLink').onclick = () => (location.href = '/admin/')
+
+// ------------------------------------------------------------------ session ---
+function paintState(state) {
+  const map = {
+    connected: ['ok', 'linked'],
+    awaiting_scan: ['warn live', 'waiting for scan'],
+    connecting: ['warn live', 'connecting'],
+    logged_out: ['bad', 'unlinked'],
+    error: ['bad', 'error'],
+    idle: ['', 'not linked']
+  }
+  const [cls, text] = map[state] ?? ['', state]
+  $('dot').className = 'dot ' + cls
+  $('stateText').textContent = text
+  $('doLogoutWa').hidden = state !== 'connected'
+  $('startLink').hidden = state === 'connected'
+  $('linkTitle').textContent = state === 'connected' ? 'WhatsApp is linked' : 'Link your WhatsApp'
+}
+
+async function refreshSession() {
+  const { ok, body } = await api('/session')
+  if (!ok) return
+  paintState(body.state)
+
+  const rows = [
+    ['state', body.state],
+    ['linked as', body.user ? (body.user.name ? body.user.name + ' — ' + body.user.id : body.user.id) : '—'],
+    ['live in process', body.live ? 'yes' : 'no'],
+    ['queued sends', body.queued ?? 0],
+    ['last connected', fmtWhen(body.lastConnectedAt)]
+  ]
+  const box = $('sessionBox')
+  box.replaceChildren(
+    ...rows.map(([k, v]) => el('div', { className: 'stat' }, el('span', {}, k), el('span', {}, String(v))))
+  )
+
+  if (body.state === 'connected') qrHolderText('Linked — nothing to scan.')
+  else if (body.state === 'awaiting_scan' && !$('paneLink').hidden) pollQr()
+}
+
+function qrHolderText(text) {
+  $('qrHolder').replaceChildren(el('p', { className: 'hint' }, text))
+}
+
+function qrHolderSpinner(text) {
+  $('qrHolder').replaceChildren(el('div', { className: 'spinner' }), el('p', { className: 'hint' }, text))
+}
+
+function qrHolderImage(dataUrl) {
+  let img = $('qrHolder').querySelector('img')
+  if (!img) {
+    img = el('img', { alt: 'WhatsApp pairing QR code' })
+    $('qrHolder').replaceChildren(img)
+  }
+  img.src = dataUrl
+}
+
+$('startLink').onclick = async e => {
+  busy(e.target, true)
+  show('linkOut', null)
+  qrHolderSpinner('Starting your session…')
+  const { ok, body } = await api('/session/start', { method: 'POST' })
+  busy(e.target, false)
+  if (!ok) {
+    qrHolderText('Could not start.')
+    return show('linkOut', body, false)
+  }
+  pollQr()
+}
+
+let qrTimer = null
+async function pollQr() {
+  clearTimeout(qrTimer)
+  const { ok, status, body } = await api('/session/qr')
+  if (ok && body.dataUrl) {
+    qrHolderImage(body.dataUrl)
+  } else if (status === 409) {
+    qrHolderText('Linked — nothing to scan.')
+    refreshSession()
+    return
+  } else {
+    qrHolderSpinner(body.message ?? 'Waiting for a code…')
+  }
+  // WhatsApp rotates the code every ~20s, so keep pulling while this tab is open.
+  if (!$('paneLink').hidden) qrTimer = setTimeout(pollQr, 3000)
+}
+
+$('doLogoutWa').onclick = async e => {
+  if (!confirm('Unlink your phone? You will need to scan a new QR to send again.')) return
+  busy(e.target, true)
+  const { ok, body } = await api('/session/logout', { method: 'POST' })
+  show('linkOut', body, ok)
+  busy(e.target, false)
+  refreshSession()
+}
+
+$('refreshSession').onclick = () => refreshSession()
+
+// ------------------------------------------------------------------- usage ---
+async function loadUsage() {
+  const { ok, body } = await api('/usage?days=14')
+  if (!ok) return
+  const k = [
+    ['sent', body.totals.sent], ['received', body.totals.received],
+    ['failed', body.totals.failed], ['contacts', body.contacts]
+  ]
+  $('kpis').replaceChildren(
+    ...k.map(([label, n]) =>
+      el('div', { className: 'kpi' }, el('div', { className: 'n' }, String(n)), el('div', { className: 'l' }, label))
+    )
+  )
+  drawBars($('chart'), body.series, row => row.sent + row.received)
+}
+
+// ------------------------------------------------------------------- inbox ---
+async function loadThreads() {
+  const { ok, body } = await api('/inbox/threads')
+  if (!ok) return
+  const host = $('threads')
+  if (!body.length) {
+    host.replaceChildren(el('div', { className: 'empty' }, 'No conversations yet. They appear here as messages arrive.'))
+    return
+  }
+  host.replaceChildren(
+    ...body.map(contact => {
+      const node = el(
+        'div',
+        { className: 'thread' },
+        el(
+          'div',
+          { className: 'who' },
+          el('span', {}, contact.name || contact.number || contact.jid),
+          contact.unread > 0 ? el('span', { className: 'unread-badge' }, String(contact.unread)) : el('span', { className: 'hint' }, fmtWhen(contact.last_message_at))
+        ),
+        el('div', { className: 'last' }, contact.is_group ? 'Group' : (contact.status ?? ''))
+      )
+      node.setAttribute('aria-selected', String(contact.jid === currentThread))
+      node.onclick = () => openThread(contact)
+      return node
+    })
+  )
+}
+
+async function openThread(contact) {
+  currentThread = contact.jid
+  $('threadWho').textContent = contact.name || contact.number || contact.jid
+  $('doReply').disabled = false
+  const { ok, body } = await api('/inbox/threads/' + encodeURIComponent(contact.jid))
+  if (!ok) return
+  const host = $('messages')
+  if (!body.length) {
+    host.replaceChildren(el('div', { className: 'empty' }, 'No messages stored for this contact yet.'))
+  } else {
+    host.replaceChildren(
+      ...body.map(msg =>
+        el(
+          'div',
+          { className: 'msg ' + msg.direction },
+          msg.body ?? `[${msg.type ?? 'no text'}]`,
+          el('span', { className: 'when' }, fmtWhen(msg.sent_at))
+        )
+      )
+    )
+    host.scrollTop = host.scrollHeight
+  }
+  await api('/inbox/threads/' + encodeURIComponent(contact.jid) + '/read', { method: 'POST' })
+  loadThreads()
+}
+
+$('doReply').onclick = async e => {
+  const message = $('replyBody').value.trim()
+  if (!message || !currentThread) return
+  busy(e.target, true)
+  const { ok, body } = await api('/send/text', { method: 'POST', body: { to: currentThread, message } })
+  busy(e.target, false)
+  if (ok) {
+    $('replyBody').value = ''
+    show('replyOut', null)
+    openThread({ jid: currentThread, name: $('threadWho').textContent })
+  } else {
+    show('replyOut', body, false)
+  }
+}
+$('refreshInbox').onclick = () => loadThreads()
+
+// ---------------------------------------------------------------- contacts ---
+async function loadContacts() {
+  const status = $('filterStatus').value
+  const { ok, body } = await api('/contacts' + (status ? '?status=' + encodeURIComponent(status) : ''))
+  if (!ok) return
+  const table = $('contactsTable')
+  table.replaceChildren()
+  if (!body.length) {
+    table.append(el('tbody', {}, el('tr', {}, el('td', {}, el('div', { className: 'empty' }, 'No contacts yet.')))))
+    return
+  }
+  table.append(
+    el('thead', {}, el('tr', {},
+      el('th', {}, 'Name'), el('th', {}, 'Number'), el('th', {}, 'Status'),
+      el('th', {}, 'Consent'), el('th', {}, 'Last message'), el('th', {}, '')
+    )),
+    el('tbody', {}, ...body.map(contact => {
+      const optOut = el('button', { className: 'mini' }, contact.opted_out ? 'Opted out' : 'Opt out')
+      optOut.onclick = async () => {
+        await api('/contacts/' + contact.id, { method: 'PATCH', body: { optedOut: !contact.opted_out } })
+        loadContacts()
+      }
+      return el('tr', {},
+        el('td', {}, contact.name || '—'),
+        el('td', { className: 'mono' }, contact.number || contact.jid),
+        el('td', {}, el('span', { className: 'tag' + (contact.status === 'won' ? ' ok' : contact.status === 'lost' ? ' bad' : '') }, contact.status)),
+        el('td', {}, contact.consent ? el('span', { className: 'tag ok' }, 'recorded') : el('span', { className: 'tag warn' }, 'unknown')),
+        el('td', { className: 'mono' }, fmtWhen(contact.last_message_at)),
+        el('td', {}, optOut)
+      )
+    }))
+  )
+}
+$('refreshContacts').onclick = () => loadContacts()
+$('filterStatus').onchange = () => loadContacts()
+
+$('addContact').onclick = async e => {
+  busy(e.target, true)
+  const { ok, body } = await api('/contacts', {
+    method: 'POST',
+    body: {
+      number: $('ncNumber').value.trim(),
+      name: $('ncName').value.trim() || undefined,
+      consent: $('ncConsent').value.trim() || undefined
+    }
+  })
+  busy(e.target, false)
+  show('contactOut', body, ok)
+  if (ok) {
+    $('ncNumber').value = $('ncName').value = $('ncConsent').value = ''
+    loadContacts()
+  }
+}
+
+// -------------------------------------------------------------------- send ---
+$('doSendText').onclick = async e => {
+  busy(e.target, true)
+  const { ok, body } = await api('/send/text', {
+    method: 'POST',
+    body: { to: $('stTo').value, message: $('stBody').value }
+  })
+  show('sendTextOut', body, ok)
+  if (ok) $('stBody').value = ''
+  busy(e.target, false)
+}
+
+$('doSendMedia').onclick = async e => {
+  busy(e.target, true)
+  const payload = { to: $('smTo').value, type: $('smType').value, url: $('smUrl').value }
+  const caption = $('smCaption').value.trim()
+  if (caption) payload.caption = caption
+  const { ok, body } = await api('/send/media', { method: 'POST', body: payload })
+  show('sendMediaOut', body, ok)
+  busy(e.target, false)
+}
+
+$('doCheck').onclick = async e => {
+  busy(e.target, true)
+  const { ok, body } = await api('/check/' + encodeURIComponent($('ckNumber').value.trim()))
+  show('checkOut', body, ok)
+  busy(e.target, false)
+}
+
+// -------------------------------------------------------------------- keys ---
+async function loadKeys() {
+  const { ok, body } = await api('/keys')
+  if (!ok) return
+  const table = $('keysTable')
+  table.replaceChildren()
+  const active = body.filter(key => !key.revoked_at)
+  if (!body.length) {
+    table.append(el('tbody', {}, el('tr', {}, el('td', {}, el('div', { className: 'empty' }, 'No keys yet.')))))
+  } else {
+    table.append(
+      el('thead', {}, el('tr', {},
+        el('th', {}, 'Name'), el('th', {}, 'Key'), el('th', {}, 'Created'),
+        el('th', {}, 'Last used'), el('th', {}, '')
+      )),
+      el('tbody', {}, ...body.map(key => {
+        const revoke = el('button', { className: 'mini' }, key.revoked_at ? 'Revoked' : 'Revoke')
+        revoke.disabled = Boolean(key.revoked_at)
+        revoke.onclick = async () => {
+          if (!confirm('Revoke this key? Anything using it stops working immediately.')) return
+          await api('/keys/' + key.id, { method: 'DELETE' })
+          loadKeys()
+        }
+        return el('tr', {},
+          el('td', {}, key.name),
+          el('td', { className: 'mono' }, key.key_prefix + '…'),
+          el('td', { className: 'mono' }, fmtWhen(key.created_at)),
+          el('td', { className: 'mono' }, fmtWhen(key.last_used_at)),
+          el('td', {}, revoke)
+        )
+      }))
+    )
+  }
+  const sample = active[0] ? active[0].key_prefix + '…' : 'YOUR_KEY'
+  $('curlExample').textContent =
+    `curl -s -X POST ${location.origin}/api/send/text \\\n` +
+    `  -H "x-api-key: ${sample}" \\\n` +
+    `  -H "content-type: application/json" \\\n` +
+    `  -d '{"to": "+91 98765 43210", "message": "Hello"}'`
+}
+
+$('createKey').onclick = async e => {
+  busy(e.target, true)
+  const { ok, body } = await api('/keys', { method: 'POST', body: { name: $('keyName').value.trim() || 'default' } })
+  busy(e.target, false)
+  if (!ok) return show('newKeyBox', body, false)
+
+  // Shown once: the server keeps only a hash.
+  const box = el('div', { className: 'card', style: 'margin:12px 0;border-color:var(--ok)' },
+    el('p', { style: 'margin:0 0 8px' }, 'Copy this now — it will not be shown again.'),
+    el('pre', {}, body.key)
+  )
+  const copy = el('button', { className: 'mini' }, 'Copy')
+  copy.onclick = async () => {
+    try { await navigator.clipboard.writeText(body.key); copy.textContent = 'Copied' }
+    catch { copy.textContent = 'Copy failed' }
+  }
+  box.append(copy)
+  $('newKeyBox').replaceChildren(box)
+  $('keyName').value = ''
+  loadKeys()
+}
+
+// ------------------------------------------------------------------ account ---
+$('saveAccount').onclick = async e => {
+  busy(e.target, true)
+  const { ok, body } = await api('/me', {
+    method: 'PATCH',
+    body: { fullName: $('acName').value.trim(), company: $('acCompany').value.trim() }
+  })
+  show('accountOut', ok ? { saved: true } : body, ok)
+  busy(e.target, false)
+}
+
+// -------------------------------------------------------------------- boot ---
+async function enterDashboard() {
+  const { ok, body } = await api('/me')
+  if (!ok) {
+    $('authScreen').hidden = false
+    authPane('paneSignin')
+    return show('authOut', body.message ?? 'Could not load your account.', false)
+  }
+  me = body
+  $('authScreen').hidden = true
+  $('dash').hidden = false
+  $('whoami').textContent = me.email + (me.company ? ' · ' + me.company : '')
+  $('acName').value = me.fullName ?? ''
+  $('acCompany').value = me.company ?? ''
+  $('adminLink').hidden = me.role !== 'admin'
+
+  tab('tabOverview')
+  await refreshSession()
+  clearInterval(pollTimer)
+  pollTimer = setInterval(refreshSession, 6000)
+}
+
+async function boot() {
+  const conf = await loadConfig()
+  if (!conf.configured) {
+    $('authScreen').hidden = false
+    authPane('paneSignin')
+    return show('authOut',
+      'This server has no Supabase configuration yet, so accounts are unavailable. ' +
+      'Set SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY and SUPABASE_SERVICE_ROLE_KEY.', false)
+  }
+
+  const fragment = consumeAuthFragment()
+  if (fragment?.type === 'recovery') {
+    recoveryToken = fragment.accessToken
+    $('authScreen').hidden = false
+    return authPane('paneReset')
+  }
+  if (fragment?.type === 'error') {
+    $('authScreen').hidden = false
+    authPane('paneSignin')
+    return show('authOut', fragment.message, false)
+  }
+
+  if (signedIn()) return enterDashboard()
+  $('authScreen').hidden = false
+  authPane('paneSignin')
+}
+
+boot()
+</script>
+</body>
+</html>

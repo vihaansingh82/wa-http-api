@@ -3,7 +3,8 @@
 #
 #   fly launch --no-deploy --copy-config --name <your-app-name>
 #   fly volumes create wa_data --size 1 --region <your-region>
-#   fly secrets set API_KEY=$(openssl rand -hex 32)
+#   fly secrets set SUPABASE_URL=... SUPABASE_PUBLISHABLE_KEY=... \
+#                   SUPABASE_SERVICE_ROLE_KEY=... PUBLIC_URL=https://<app>.fly.dev
 #   fly deploy
 #
 # Change `app` to something unique before the first deploy.
@@ -17,10 +18,9 @@ primary_region = "sin"
 [env]
   PORT = "3000"
   HOST = "0.0.0.0"
-  # Both of these must live on the mounted volume, or every restart forgets the
-  # WhatsApp session and you re-scan the QR.
+  # Must live on the mounted volume: this folder holds every client's WhatsApp
+  # credentials, and losing it means they all re-scan.
   AUTH_DIR = "/data/auth"
-  TOKEN_STORE = "/data/tokens.json"
   LOG_PRETTY = "false"
   SEND_DELAY_MS = "3000"
 

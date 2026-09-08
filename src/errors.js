@@ -16,6 +16,11 @@ export class ApiError extends Error {
     return new ApiError(401, 'unauthorized', message)
   }
 
+  /** Authenticated, but not allowed. Distinct from 401, which means unidentified. */
+  static forbidden(message = 'Not permitted.') {
+    return new ApiError(403, 'forbidden', message)
+  }
+
   static notFound(message = 'Route not found.') {
     return new ApiError(404, 'not_found', message)
   }

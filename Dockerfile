@@ -1,13 +1,13 @@
 # ---- dependencies -----------------------------------------------------------
 # Debian-based, not Alpine: baileys pulls in sharp, whose prebuilt binaries are
 # glibc-only unless you install the musl variant by hand.
-FROM node:20-bookworm-slim AS deps
+FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 # ---- runtime ----------------------------------------------------------------
-FROM node:20-bookworm-slim
+FROM node:22-bookworm-slim
 ENV NODE_ENV=production \
     PORT=3000 \
     HOST=0.0.0.0 \
