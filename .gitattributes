@@ -1,0 +1,18 @@
+# This project is developed on Windows and deployed to Linux containers.
+# core.autocrlf=true would otherwise hand Docker a CRLF copy of the entrypoint,
+# and the kernel then reads its shebang as "/bin/sh\r" -- the container exits
+# with "no such file or directory" and names a file that is plainly there.
+# Anything the Linux image executes or parses is pinned to LF.
+* text=auto
+
+*.sh          text eol=lf
+Dockerfile    text eol=lf
+.dockerignore text eol=lf
+*.yml         text eol=lf
+*.yaml        text eol=lf
+*.toml        text eol=lf
+*.sql         text eol=lf
+.env.example  text eol=lf
+
+# Binary, never touched.
+*.png binary

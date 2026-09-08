@@ -23,6 +23,12 @@ primary_region = "sin"
   AUTH_DIR = "/data/auth"
   LOG_PRETTY = "false"
   SEND_DELAY_MS = "3000"
+  # Sized for the 512 MB VM below, NOT the code default of 25. Each linked
+  # client is a live WebSocket plus its own Signal store, so 25 of them on
+  # 512 MB is an OOM loop -- and an OOM loop re-pairs every client repeatedly,
+  # which is the one thing worth paying to avoid. Raise this and `memory`
+  # together, roughly 1 GB per 10 tenants.
+  MAX_TENANT_SESSIONS = "5"
 
 [http_service]
   internal_port = 3000

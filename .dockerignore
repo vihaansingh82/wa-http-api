@@ -1,9 +1,30 @@
+# Rebuilt in the image by `npm ci`.
 node_modules
+
+# Credentials. `auth` is every linked client's WhatsApp session and must come
+# from the mounted volume, never baked into an image someone could pull.
 auth
+data
 .env
+qr.png
+qr.json
+*.log
+tunnel-url.txt
+
 .git
 .gitignore
-*.log
+.github
+
+# Not used at runtime: the image only needs package.json, index.js, src, public
+# and the entrypoint. Keeping these out shrinks the build context.
+test
+supabase
 Dockerfile
 .dockerignore
+docker-compose.yml
+fly.toml
+render.yaml
 README.md
+DEPLOY.md
+.env.example
+file

@@ -248,7 +248,7 @@ gets numbers flagged.
 | `PUBLIC_URL` | *(empty)* | Origin for reset/confirmation links |
 | `PORT` / `HOST` | `3000` / `0.0.0.0` | HTTP listener |
 | `AUTH_DIR` | `./auth` | Per-tenant WhatsApp credentials live under `auth/tenants/<id>/` |
-| `MAX_TENANT_SESSIONS` | `25` | Cap on simultaneous sockets |
+| `MAX_TENANT_SESSIONS` | `25` | Cap on simultaneous sockets. Both deploy configs lower it to `5` to match a 512 MB instance |
 | `VERIFY_RECIPIENT` | `true` | Resolve recipients before sending |
 | `SEND_DELAY_MS` | `3000` | Minimum gap between a tenant's sends |
 | `MAX_QUEUE_SIZE` | `500` | Queue depth before `503` |
@@ -263,7 +263,8 @@ like a password store.
 `MAX_TENANT_SESSIONS` is the real capacity limit: each socket is a live WebSocket
 plus its own Signal store. When the cap is hit, an idle session is evicted (a
 connected one only as a last resort) — its credentials stay on disk and the next
-request starts it again.
+request starts it again. Budget roughly 1 GB of RAM per 10 tenants and raise the
+cap and the instance size together; see [DEPLOY.md](DEPLOY.md).
 
 ---
 

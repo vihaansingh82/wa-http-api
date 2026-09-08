@@ -4,6 +4,12 @@ import { createServer } from './src/server.js'
 import { createTenantManager } from './src/tenants.js'
 import { supabaseConfigured } from './src/supabase.js'
 
+// Declared before the handlers below, which can fire while the server is still
+// being created: reading a `const` in that window would throw a ReferenceError
+// from inside the crash handler and hide the original error.
+let server = null
+let shuttingDown = false
+
 // A dropped WhatsApp socket or a dead webhook receiver must never take the
 // process down, so nothing is left to Node's default crash-on-rejection.
 process.on('unhandledRejection', reason => {
@@ -18,7 +24,7 @@ process.on('uncaughtException', err => {
 const tenants = createTenantManager()
 const app = createServer(tenants)
 
-const server = app.listen(config.port, config.host, () => {
+server = app.listen(config.port, config.host, () => {
   logger.info(
     {
       url: `http://${config.host}:${config.port}`,
@@ -39,8 +45,6 @@ const server = app.listen(config.port, config.host, () => {
   }
 })
 
-let shuttingDown = false
-
 function shutdown(signal, code = 0) {
   if (shuttingDown) return
   shuttingDown = true
@@ -51,12 +55,15 @@ function shutdown(signal, code = 0) {
   const force = setTimeout(done, 15000)
   force.unref()
 
-  server.close(() => {
+  const stopSessions = () =>
     tenants
       .stopAll()
       .catch(err => logger.error({ err }, 'error while stopping tenant sessions'))
       .finally(done)
-  })
+
+  // Crashing before listen() means there is no server to close.
+  if (server) server.close(stopSessions)
+  else stopSessions()
 }
 
 for (const signal of ['SIGINT', 'SIGTERM']) {

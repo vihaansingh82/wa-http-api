@@ -16,10 +16,23 @@ disk. Budget for the smallest paid instance — roughly $2–7/month.
 > Forced re-pairing is a real ban risk, not a theoretical one. On a multi-tenant
 > deployment it is worse: one lost disk means every client re-scans at once.
 
-**Capacity.** `MAX_TENANT_SESSIONS` (default 25) is the real limit. Each linked
-client is a live WebSocket plus its own Signal store, so plan memory per tenant
-rather than per request. Past the cap, idle sessions are evicted and restart on
-next use; connected ones are dropped only as a last resort.
+**Capacity.** `MAX_TENANT_SESSIONS` is the real limit. Each linked client is a
+live WebSocket plus its own Signal store, so plan memory per tenant rather than
+per request. Past the cap, idle sessions are evicted and restart on next use;
+connected ones are dropped only as a last resort.
+
+The code default is `25`, which suits a machine with several GB. Both deploy
+configs deliberately override it to **5**, because they specify a 512 MB
+instance and 25 sockets there is an OOM loop — and an OOM loop re-pairs every
+client over and over, which is the exact failure this whole page is about.
+Budget roughly **1 GB per 10 tenants** and raise the cap and the instance size
+together:
+
+| Where | Instance size | `MAX_TENANT_SESSIONS` |
+| --- | --- | --- |
+| [fly.toml](fly.toml) `[[vm]] memory` | `512mb` | `5` |
+| [render.yaml](render.yaml) `plan` | `0.5c-512mb` | `5` |
+| Either, scaled up | `2gb` / `1c-2g` | `20` |
 
 ---
 
@@ -69,7 +82,15 @@ fly logs
 
 [fly.toml](fly.toml) pins what matters: the volume at `/data`,
 `AUTH_DIR=/data/auth`, `auto_stop_machines = false`, `min_machines_running = 1`,
-and a `/health` check. Edit `app` and `primary_region` before the first deploy.
+and a `/health` check. Edit `app` and `primary_region` before the first deploy —
+`app = "wa-http-api"` is a placeholder and app names are globally unique.
+
+A freshly created Fly volume is owned by `root`, so a container starting
+straight as an unprivileged user cannot write to it and every session dies with
+`EACCES` on its first write — which reads like a WhatsApp fault and is not one.
+[docker-entrypoint.sh](docker-entrypoint.sh) handles this: it takes ownership of
+`AUTH_DIR` as root, then drops to the `node` user before exec'ing the server.
+Nothing to configure, but that is why the image does not end on `USER node`.
 
 For push-to-deploy, add `FLY_API_TOKEN` (from `fly tokens create deploy`) as a
 GitHub Actions secret — [.github/workflows/deploy.yml](.github/workflows/deploy.yml)

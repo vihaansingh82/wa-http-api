@@ -34,6 +34,14 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
+      - key: NODE_ENV
+        value: production
+      # Sized for the 0.5c-512mb plan above, NOT the code default of 25. Each
+      # linked client is a live WebSocket plus its own Signal store, so 25 on
+      # 512 MB is an OOM loop -- and an OOM loop re-pairs every client over and
+      # over. Raise this and `plan` together, roughly 1 GB per 10 tenants.
+      - key: MAX_TENANT_SESSIONS
+        value: "5"
       # WhatsApp credentials must sit on the disk, or a redeploy loses every
       # client's session and they all have to re-scan.
       - key: AUTH_DIR
