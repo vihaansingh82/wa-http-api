@@ -23,6 +23,45 @@ const bool = (name, fallback) => {
 }
 
 
+/**
+ * The service-role slot is easy to fill with the wrong key: the dashboard shows
+ * the publishable and secret keys side by side. Pasting the browser key here
+ * fails later as a confusing permission error on the first query, so name the
+ * mistake at startup instead.
+ */
+const serviceKey = str('SUPABASE_SERVICE_ROLE_KEY', '')
+if (serviceKey) {
+  const looksPublishable = serviceKey.startsWith('sb_publishable_')
+  let claimedRole = null
+  if (serviceKey.startsWith('eyJ')) {
+    try {
+      const payload = JSON.parse(Buffer.from(serviceKey.split('.')[1], 'base64url').toString())
+      claimedRole = payload.role ?? null
+    } catch {
+      // Not a readable JWT; the checks below still apply.
+    }
+  }
+
+  if (looksPublishable || claimedRole === 'anon') {
+    throw new Error(
+      'SUPABASE_SERVICE_ROLE_KEY holds a publishable/anon key, not a service key. ' +
+        'Use the service_role key from Legacy API keys, or create a secret key (sb_secret_…). ' +
+        'The publishable key belongs in SUPABASE_PUBLISHABLE_KEY.'
+    )
+  }
+  if (claimedRole && claimedRole !== 'service_role') {
+    throw new Error(
+      `SUPABASE_SERVICE_ROLE_KEY is a token for role "${claimedRole}", not service_role.`
+    )
+  }
+  if (!looksPublishable && !claimedRole && !serviceKey.startsWith('sb_secret_')) {
+    throw new Error(
+      'SUPABASE_SERVICE_ROLE_KEY does not look like a Supabase key. Expected a service_role ' +
+        'JWT (eyJ…) or a secret key (sb_secret_…).'
+    )
+  }
+}
+
 const webhookUrl = str('WEBHOOK_URL', '')
 if (webhookUrl) {
   const parsed = new URL(webhookUrl) // throws on malformed URLs, which is what we want at boot
@@ -41,7 +80,7 @@ export const config = {
   // Safe to serve to the browser; it is the key the dashboards sign in with.
   supabasePublishableKey: str('SUPABASE_PUBLISHABLE_KEY', ''),
   // Server-only. Bypasses RLS, so it must never reach the browser.
-  supabaseServiceKey: str('SUPABASE_SERVICE_ROLE_KEY', ''),
+  supabaseServiceKey: serviceKey,
   // Where password-reset and confirmation links send people back to.
   publicUrl: str('PUBLIC_URL', ''),
   // Cap on simultaneous WhatsApp sockets; each one is a live connection and

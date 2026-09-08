@@ -4,7 +4,9 @@ process.env.LOG_LEVEL = 'silent'
 process.env.SEND_DELAY_MS = '0'
 process.env.SUPABASE_URL = 'https://example.supabase.co'
 process.env.SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_test'
-process.env.SUPABASE_SERVICE_ROLE_KEY = 'service_role_test'
+// A real-shaped service_role JWT: config.js now rejects anything that is not
+// plausibly a service key, which is the point of that guard.
+process.env.SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJvbGUiOiJzZXJ2aWNlX3JvbGUifQ.testsignature"
 
 const root = new URL('../', import.meta.url)
 const { createServer } = await import(new URL('src/server.js', root))
@@ -165,7 +167,7 @@ check('GET /health is public', (await fetch(base + '/health')).status === 200)
 const conf = await call('/public-config')
 check('public-config is public', conf.status === 200)
 check('publishable key is exposed', conf.body.supabaseKey === 'sb_publishable_test')
-check('service role key is NOT exposed', !JSON.stringify(conf.body).includes('service_role_test'), JSON.stringify(conf.body))
+check('service role key is NOT exposed', !JSON.stringify(conf.body).includes(process.env.SUPABASE_SERVICE_ROLE_KEY), JSON.stringify(conf.body))
 check('landing page served', (await fetch(base + '/')).status === 200)
 check('client dashboard served', (await fetch(base + '/app/')).status === 200)
 check('admin dashboard served', (await fetch(base + '/admin/')).status === 200)
