@@ -1,4 +1,4 @@
-# wa-http-api
+# Sandesh
 
 A self-hosted, **multi-tenant** WhatsApp HTTP API. Each client signs up, links
 their own WhatsApp by scanning a QR, and gets their own API key. Built on
@@ -116,7 +116,7 @@ set your own SMTP under **Authentication → Emails**.
 3. **Overview** — sent/received/failed over 14 days, connection state.
 4. **Inbox** — conversation threads, with replies sent straight from the browser.
 5. **Contacts** — status, tags, consent, one-click opt-out.
-6. **Send** — text, media by URL, and a number lookup.
+6. **Send** — text, media, location, contacts, polls, stickers, audio, and a number lookup.
 7. **API keys** — create and revoke. The full key is shown **once**.
 
 ### `/admin` — admin
@@ -169,7 +169,17 @@ Everything is under `/api` and scoped to whoever the credential belongs to.
 | POST | `/api/keys` | Create one (returns the plaintext once) |
 | DELETE | `/api/keys/:id` | Revoke one |
 | POST | `/api/send/text` | Send a text |
-| POST | `/api/send/media` | Send image/video/document by URL |
+| POST | `/api/send/media` | Send image/video/document, by URL or base64 |
+| POST | `/api/send/location` | Send a map pin |
+| POST | `/api/send/contact` | Send one or more contact cards |
+| POST | `/api/send/poll` | Send a poll |
+| POST | `/api/send/sticker` | Send a sticker (WebP) |
+| POST | `/api/send/audio` | Send audio or a voice note |
+| POST | `/api/messages/:id/react` | React with an emoji |
+| POST | `/api/messages/:id/edit` | Edit your own message |
+| POST | `/api/messages/:id/delete` | Delete for everyone |
+| POST | `/api/messages/:id/pin` | Pin or unpin it in the chat |
+| POST | `/api/messages/:id/forward` | Forward it to another chat |
 | GET | `/api/check/:number` | Is the number on WhatsApp? |
 | GET | `/api/inbox/threads` | Conversation list |
 | GET | `/api/inbox/threads/:jid` | Messages in one thread |

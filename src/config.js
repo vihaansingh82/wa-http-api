@@ -74,7 +74,7 @@ export const config = {
   port: int('PORT', 3000, { min: 1, max: 65535 }),
   host: str('HOST', '0.0.0.0'),
   authDir: path.resolve(str('AUTH_DIR', './auth')),
-  sessionName: str('SESSION_NAME', 'wa-http-api'),
+  sessionName: str('SESSION_NAME', 'sandesh'),
   // ---- Supabase: auth + all tenant data ----
   supabaseUrl: str('SUPABASE_URL', ''),
   // Safe to serve to the browser; it is the key the dashboards sign in with.
@@ -90,6 +90,10 @@ export const config = {
   // number missing its country code produces a valid-looking JID that belongs
   // to nobody: WhatsApp accepts the message and silently drops it.
   verifyRecipient: bool('VERIFY_RECIPIENT', true),
+  // Cap on base64 media accepted in a request body. WhatsApp itself refuses
+  // much beyond this, and the JSON body limit is raised to match on the media
+  // routes only -- every other route keeps the small limit.
+  maxMediaMb: int('MAX_MEDIA_MB', 16, { min: 1, max: 100 }),
   sendDelayMs: int('SEND_DELAY_MS', 3000, { min: 0, max: 600000 }),
   maxQueueSize: int('MAX_QUEUE_SIZE', 500, { min: 1, max: 100000 }),
   webhookUrl,

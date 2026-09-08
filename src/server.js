@@ -22,12 +22,45 @@ export function createServer(tenants, { store = supabaseStore } = {}) {
   const app = express()
   app.disable('x-powered-by')
 
-  app.use(express.json({ limit: '256kb' }))
+  /**
+   * Two body limits, not one.
+   *
+   * Media can be posted as base64, which needs megabytes; every other route
+   * needs kilobytes. Applying the large limit everywhere would let any endpoint
+   * be used to make the server buffer megabytes per request, so the big limit is
+   * scoped to the routes that actually carry media.
+   */
+  const BASE64_MEDIA_ROUTES = new Set([
+    '/api/send/media',
+    '/api/send/sticker',
+    '/api/send/audio'
+  ])
+  const smallJson = express.json({ limit: '256kb' })
+  const largeJson = express.json({ limit: `${config.maxMediaMb + 8}mb` })
 
-  // express.json() throws a SyntaxError on malformed input; turn it into a 400.
-  app.use((err, _req, _res, next) => {
+  app.use((req, res, next) =>
+    (BASE64_MEDIA_ROUTES.has(req.path) ? largeJson : smallJson)(req, res, next)
+  )
+
+  // Body-parser failures arrive as generic errors that would otherwise fall
+  // through to the 500 handler, hiding a plain client mistake behind
+  // "Something went wrong".
+  app.use((err, req, _res, next) => {
     if (err instanceof SyntaxError && 'body' in err) {
       return next(ApiError.badRequest('Request body is not valid JSON.'))
+    }
+    if (err?.type === 'entity.too.large' || err?.status === 413) {
+      const limitKb = Math.round((err.limit ?? 0) / 1024)
+      return next(
+        new ApiError(
+          413,
+          'payload_too_large',
+          BASE64_MEDIA_ROUTES.has(req.path)
+            ? `Body is larger than the ${Math.round(limitKb / 1024)} MB limit. Raise MAX_MEDIA_MB, or send the media as a URL instead of base64.`
+            : `Body is larger than the ${limitKb} KB limit for this route.`,
+          { limitBytes: err.limit ?? null, receivedBytes: err.length ?? null }
+        )
+      )
     }
     next(err)
   })

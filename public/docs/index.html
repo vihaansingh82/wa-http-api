@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>API Reference · WhatsApp HTTP API</title>
+<title>API Reference · Sandesh</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml" />
 <link rel="stylesheet" href="/shared.css" />
 <style>
   /* ---- docs shell ---------------------------------------------------- */
@@ -153,7 +154,10 @@
 
 <header class="docs-top">
   <div class="inner">
-    <h1>API Reference<span class="sub">WhatsApp HTTP API</span></h1>
+    <a class="brand" href="/" style="text-decoration:none;color:inherit">
+      <img class="brand-mark" src="/logo.svg" alt="" />
+      <h1>Sandesh <span class="sub">API Reference</span></h1>
+    </a>
     <span class="spacer"></span>
     <span class="pill" id="serverPill"><span class="dot" id="serverDot"></span><span id="serverText">checking…</span></span>
     <a class="top-link" href="/app/">Dashboard</a>
@@ -563,6 +567,26 @@
         <code>MAX_QUEUE_SIZE</code> (default 500) you get <code>503</code>.
       </div>
 
+      <h4 id="send-options" style="scroll-margin-top:72px">Shared send options</h4>
+      <p>Every endpoint in this section accepts these in addition to its own fields.</p>
+      <div class="scroll-x"><table>
+        <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">replyTo</td><td class="mono">string</td><td>A WhatsApp message id to quote. The message must still be in this server's recent cache (last 500) — see <a href="#messages">Message operations</a></td></tr>
+          <tr><td class="mono">mentions</td><td class="mono">string[]</td><td>Numbers or JIDs to tag. Max 64. In a group, put <code>@number</code> in the text as well or the tag shows with no visible handle</td></tr>
+          <tr><td class="mono">viewOnce</td><td class="mono">boolean</td><td>Disappears after the recipient opens it once</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout" style="margin-top:16px">
+        <strong>Media can be a URL or base64</strong>
+        <code>/send/media</code>, <code>/send/sticker</code> and <code>/send/audio</code>
+        all take either <code>url</code> (http/https, streamed by the server) or
+        <code>base64</code> — raw base64 or a full <code>data:</code> URI. Base64 is
+        capped by <code>MAX_MEDIA_MB</code> (default 16 MB); the body limit on those
+        three routes is raised to match, while every other route stays at 256 KB.
+      </div>
+
       <details class="ep" data-method="POST" data-path="/api/send/text" id="ep-send-text">
         <summary>
           <span class="m post">POST</span>
@@ -576,8 +600,11 @@
             <tbody>
               <tr><td class="mono">to</td><td class="mono">string</td><td><span class="req">required</span></td><td>Number or JID — see <a href="#recipients">Recipient format</a></td></tr>
               <tr><td class="mono">message</td><td class="mono">string</td><td><span class="req">required</span></td><td>Max 65536 chars, must not be blank</td></tr>
+              <tr><td class="mono">linkPreview</td><td class="mono">boolean</td><td><span class="opt">optional</span></td><td><code>false</code> suppresses the preview WhatsApp would generate</td></tr>
             </tbody>
           </table></div>
+          <p class="note">Plus the <a href="#send-options">shared send options</a>:
+             <code>replyTo</code>, <code>mentions</code>, <code>viewOnce</code>.</p>
           <h4>Request</h4>
           <div class="code"><pre class="sample" data-sample="send-text">…</pre></div>
           <h4>Response 202</h4>
@@ -622,8 +649,10 @@
             <tbody>
               <tr><td class="mono">to</td><td class="mono">string</td><td><span class="req">required</span></td><td>Number or JID</td></tr>
               <tr><td class="mono">type</td><td class="mono">enum</td><td><span class="req">required</span></td><td><code>image</code> · <code>video</code> · <code>document</code></td></tr>
-              <tr><td class="mono">url</td><td class="mono">string</td><td><span class="req">required</span></td><td>Absolute <code>http</code>/<code>https</code>, max 2048 chars</td></tr>
+              <tr><td class="mono">url</td><td class="mono">string</td><td>one&nbsp;of</td><td>Absolute <code>http</code>/<code>https</code>, or a <code>data:</code> URI</td></tr>
+              <tr><td class="mono">base64</td><td class="mono">string</td><td>one&nbsp;of</td><td>Raw base64. Capped by <code>MAX_MEDIA_MB</code></td></tr>
               <tr><td class="mono">caption</td><td class="mono">string</td><td><span class="opt">optional</span></td><td>Max 4096 chars</td></tr>
+              <tr><td class="mono">gif</td><td class="mono">boolean</td><td><span class="opt">optional</span></td><td><code>video</code> only. Also accepted as <code>isGif</code></td></tr>
               <tr><td class="mono">mimetype</td><td class="mono">string</td><td><span class="opt">optional</span></td><td>Derived from the URL extension when omitted</td></tr>
               <tr><td class="mono">fileName</td><td class="mono">string</td><td><span class="opt">optional</span></td><td>Documents only; taken from the URL when omitted</td></tr>
             </tbody>
@@ -647,6 +676,146 @@
         </div>
       </details>
 
+      <details class="ep" data-method="POST" data-path="/api/send/location" id="ep-send-location">
+        <summary>
+          <span class="m post">POST</span>
+          <span class="path">/api/send/location</span>
+          <span class="desc">Send a pin on the map</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Body</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Field</th><th>Type</th><th></th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">to</td><td class="mono">string</td><td><span class="req">required</span></td><td>Number or JID</td></tr>
+              <tr><td class="mono">latitude</td><td class="mono">number</td><td><span class="req">required</span></td><td>−90 to 90</td></tr>
+              <tr><td class="mono">longitude</td><td class="mono">number</td><td><span class="req">required</span></td><td>−180 to 180</td></tr>
+              <tr><td class="mono">name</td><td class="mono">string</td><td><span class="opt">optional</span></td><td>Place name shown on the card, max 200</td></tr>
+              <tr><td class="mono">address</td><td class="mono">string</td><td><span class="opt">optional</span></td><td>Second line, max 400</td></tr>
+            </tbody>
+          </table></div>
+          <h4>Request</h4>
+          <div class="code"><pre class="sample" data-sample="location">…</pre></div>
+          <p class="note">Coordinates sent as strings are coerced, but anything
+             non-numeric or out of range is a <code>400</code> rather than a pin in the
+             ocean.</p>
+        </div>
+      </details>
+
+      <details class="ep" data-method="POST" data-path="/api/send/contact" id="ep-send-contact">
+        <summary>
+          <span class="m post">POST</span>
+          <span class="path">/api/send/contact</span>
+          <span class="desc">Send one or several contact cards</span>
+        </summary>
+        <div class="ep-body">
+          <p>Pass a single contact inline, or a <code>contacts</code> array for a list.
+             The server builds the vCard for you.</p>
+          <h4>Body</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Field</th><th>Type</th><th></th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">to</td><td class="mono">string</td><td><span class="req">required</span></td><td>Number or JID</td></tr>
+              <tr><td class="mono">name</td><td class="mono">string</td><td><span class="req">required</span></td><td>Also accepted as <code>fullName</code>. Max 120</td></tr>
+              <tr><td class="mono">number</td><td class="mono">string</td><td><span class="req">required</span></td><td>The contact's own number</td></tr>
+              <tr><td class="mono">organization</td><td class="mono">string</td><td><span class="opt">optional</span></td><td>Max 120</td></tr>
+              <tr><td class="mono">email</td><td class="mono">string</td><td><span class="opt">optional</span></td><td>Max 200</td></tr>
+              <tr><td class="mono">contacts</td><td class="mono">object[]</td><td><span class="opt">optional</span></td><td>Up to 25 of the above, instead of inline fields</td></tr>
+            </tbody>
+          </table></div>
+          <h4>Request</h4>
+          <div class="code"><pre class="sample" data-sample="contact">…</pre></div>
+          <div class="callout">
+            <strong>The card is linked, not just text</strong>
+            Each vCard carries <code>waid=</code>, which is what makes the card tappable
+            as a real WhatsApp account on the recipient's phone. Without it the card
+            arrives but does nothing, which looks like a bug.
+          </div>
+        </div>
+      </details>
+
+      <details class="ep" data-method="POST" data-path="/api/send/poll" id="ep-send-poll">
+        <summary>
+          <span class="m post">POST</span>
+          <span class="path">/api/send/poll</span>
+          <span class="desc">Send a poll</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Body</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Field</th><th>Type</th><th></th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">to</td><td class="mono">string</td><td><span class="req">required</span></td><td>Number or JID</td></tr>
+              <tr><td class="mono">question</td><td class="mono">string</td><td><span class="req">required</span></td><td>Max 255 chars</td></tr>
+              <tr><td class="mono">options</td><td class="mono">string[]</td><td><span class="req">required</span></td><td>2–12 choices, each max 100 chars, no duplicates</td></tr>
+              <tr><td class="mono">selectableCount</td><td class="mono">integer</td><td><span class="opt">optional</span></td><td>1 (default) for single choice, up to the option count for multi</td></tr>
+            </tbody>
+          </table></div>
+          <h4>Request</h4>
+          <div class="code"><pre class="sample" data-sample="poll">…</pre></div>
+          <p class="note">Duplicate options are rejected with <code>400</code> because
+             WhatsApp silently drops such a poll rather than reporting an error — the
+             send would look successful and nothing would arrive.</p>
+          <p class="note">Votes come back as inbound <code>pollUpdateMessage</code>
+             events, which currently reach your webhook but are not yet tallied into a
+             result for you.</p>
+        </div>
+      </details>
+
+      <details class="ep" data-method="POST" data-path="/api/send/sticker" id="ep-send-sticker">
+        <summary>
+          <span class="m post">POST</span>
+          <span class="path">/api/send/sticker</span>
+          <span class="desc">Send a sticker</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Body</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Field</th><th>Type</th><th></th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">to</td><td class="mono">string</td><td><span class="req">required</span></td><td>Number or JID</td></tr>
+              <tr><td class="mono">url</td><td class="mono">string</td><td>one&nbsp;of</td><td>URL or <code>data:</code> URI</td></tr>
+              <tr><td class="mono">base64</td><td class="mono">string</td><td>one&nbsp;of</td><td>Raw base64</td></tr>
+              <tr><td class="mono">animated</td><td class="mono">boolean</td><td><span class="opt">optional</span></td><td>Set for an animated webp</td></tr>
+            </tbody>
+          </table></div>
+          <div class="callout warn">
+            <strong>Must already be WebP</strong>
+            WhatsApp only accepts WebP stickers, 512×512, and this server does not
+            convert for you. A PNG or JPEG here is delivered as something the recipient's
+            phone cannot render.
+          </div>
+        </div>
+      </details>
+
+      <details class="ep" data-method="POST" data-path="/api/send/audio" id="ep-send-audio">
+        <summary>
+          <span class="m post">POST</span>
+          <span class="path">/api/send/audio</span>
+          <span class="desc">Send audio, or a voice note</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Body</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Field</th><th>Type</th><th></th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">to</td><td class="mono">string</td><td><span class="req">required</span></td><td>Number or JID</td></tr>
+              <tr><td class="mono">url</td><td class="mono">string</td><td>one&nbsp;of</td><td>URL or <code>data:</code> URI</td></tr>
+              <tr><td class="mono">base64</td><td class="mono">string</td><td>one&nbsp;of</td><td>Raw base64</td></tr>
+              <tr><td class="mono">voiceNote</td><td class="mono">boolean</td><td><span class="opt">optional</span></td><td>Also accepted as <code>ptt</code>. Renders with a waveform</td></tr>
+              <tr><td class="mono">seconds</td><td class="mono">integer</td><td><span class="opt">optional</span></td><td>Duration, so the player shows it before downloading</td></tr>
+              <tr><td class="mono">mimetype</td><td class="mono">string</td><td><span class="opt">optional</span></td><td>Defaults to opus for a voice note, mpeg otherwise</td></tr>
+            </tbody>
+          </table></div>
+          <div class="callout warn">
+            <strong>A voice note has to be opus</strong>
+            With <code>voiceNote: true</code> the default mimetype becomes
+            <code>audio/ogg; codecs=opus</code>. Send an mp3 as a voice note and WhatsApp
+            shows it as a file attachment with no waveform.
+          </div>
+        </div>
+      </details>
+
       <details class="ep" data-method="GET" data-path="/api/check/{number}" id="ep-check">
         <summary>
           <span class="m get">GET</span>
@@ -666,6 +835,165 @@
 }</pre></div>
         </div>
       </details>
+    </section>
+
+    <!-- ---------- message operations ---------- -->
+    <section class="grp" id="messages" data-group="Message operations">
+      <h2 class="grp-title">Message operations</h2>
+      <p class="grp-note">
+        Acting on a message that already exists. The <code>{id}</code> in the path is
+        WhatsApp's own message id — the <code>id</code> a send returned, or the
+        <code>id</code> on a webhook payload — not a database id.
+      </p>
+
+      <div class="callout">
+        <strong>Two tiers, and the difference matters</strong>
+        Reacting, deleting and pinning need only the message's <em>key</em>, which this
+        server can rebuild from the id plus <code>to</code> — so they work on any
+        message, however old. Replying (<code>replyTo</code>) and forwarding need the
+        <em>whole</em> message, so they only work for the last <strong>500</strong>
+        messages this process has seen. A restart clears that cache, and an older id
+        returns <code>404</code> rather than sending something wrong.
+      </div>
+
+      <details class="ep" data-method="POST" data-path="/api/messages/{id}/react" id="ep-react">
+        <summary>
+          <span class="m post">POST</span>
+          <span class="path">/api/messages/<span class="var">{id}</span>/react</span>
+          <span class="desc">React with an emoji, or clear a reaction</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Body</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Field</th><th>Type</th><th></th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">to</td><td class="mono">string</td><td><span class="req">required</span></td><td>The chat the message is in</td></tr>
+              <tr><td class="mono">emoji</td><td class="mono">string</td><td><span class="req">required</span></td><td>Exactly one emoji, or <code>""</code> to remove your reaction</td></tr>
+              <tr><td class="mono">fromMe</td><td class="mono">boolean</td><td><span class="opt">optional</span></td><td>Whether the target message is one you sent. Default <code>false</code></td></tr>
+            </tbody>
+          </table></div>
+          <h4>Request</h4>
+          <div class="code"><pre class="sample" data-sample="react">…</pre></div>
+          <p class="note">Validated by grapheme, not by string length: one emoji is often
+             several code points, and two emoji are rejected with <code>400</code>
+             because WhatsApp would keep only the first.</p>
+        </div>
+      </details>
+
+      <details class="ep" data-method="POST" data-path="/api/messages/{id}/edit" id="ep-edit">
+        <summary>
+          <span class="m post">POST</span>
+          <span class="path">/api/messages/<span class="var">{id}</span>/edit</span>
+          <span class="desc">Change the text of a message you sent</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Body</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Field</th><th>Type</th><th></th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">to</td><td class="mono">string</td><td><span class="req">required</span></td><td>The chat the message is in</td></tr>
+              <tr><td class="mono">message</td><td class="mono">string</td><td><span class="req">required</span></td><td>The replacement text</td></tr>
+            </tbody>
+          </table></div>
+          <div class="callout warn">
+            <strong>WhatsApp's own 15-minute window applies</strong>
+            Only your own messages, and only for about fifteen minutes after sending.
+            Past that WhatsApp accepts the request and does nothing, so a
+            <code>202</code> here is not proof the edit landed.
+          </div>
+        </div>
+      </details>
+
+      <details class="ep" data-method="POST" data-path="/api/messages/{id}/delete" id="ep-delete">
+        <summary>
+          <span class="m post">POST</span>
+          <span class="path">/api/messages/<span class="var">{id}</span>/delete</span>
+          <span class="desc">Delete for everyone</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Body</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Field</th><th>Type</th><th></th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">to</td><td class="mono">string</td><td><span class="req">required</span></td><td>The chat the message is in</td></tr>
+              <tr><td class="mono">fromMe</td><td class="mono">boolean</td><td><span class="opt">optional</span></td><td>Default <code>true</code>. Set <code>false</code> to delete someone else's — needs group admin</td></tr>
+            </tbody>
+          </table></div>
+          <p class="note">Allowed even when the contact has opted out: removing something
+             you already sent is not outreach.</p>
+        </div>
+      </details>
+
+      <details class="ep" data-method="POST" data-path="/api/messages/{id}/pin" id="ep-pin">
+        <summary>
+          <span class="m post">POST</span>
+          <span class="path">/api/messages/<span class="var">{id}</span>/pin</span>
+          <span class="desc">Pin or unpin a message in the chat</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Body</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Field</th><th>Type</th><th></th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">to</td><td class="mono">string</td><td><span class="req">required</span></td><td>The chat the message is in</td></tr>
+              <tr><td class="mono">unpin</td><td class="mono">boolean</td><td><span class="opt">optional</span></td><td>Removes the pin instead of adding one</td></tr>
+              <tr><td class="mono">seconds</td><td class="mono">integer</td><td><span class="opt">optional</span></td><td><code>86400</code> (24h), <code>604800</code> (7d, default) or <code>2592000</code> (30d)</td></tr>
+              <tr><td class="mono">fromMe</td><td class="mono">boolean</td><td><span class="opt">optional</span></td><td>Whether the target message is yours</td></tr>
+            </tbody>
+          </table></div>
+          <p class="note">Those three durations are the only ones WhatsApp accepts;
+             anything else is a <code>400</code> rather than a pin that quietly expires
+             at the wrong time.</p>
+        </div>
+      </details>
+
+      <details class="ep" data-method="POST" data-path="/api/messages/{id}/forward" id="ep-forward">
+        <summary>
+          <span class="m post">POST</span>
+          <span class="path">/api/messages/<span class="var">{id}</span>/forward</span>
+          <span class="desc">Forward a message to another chat</span>
+        </summary>
+        <div class="ep-body">
+          <h4>Body</h4>
+          <div class="scroll-x"><table>
+            <thead><tr><th>Field</th><th>Type</th><th></th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">to</td><td class="mono">string</td><td><span class="req">required</span></td><td>Where to forward it</td></tr>
+            </tbody>
+          </table></div>
+          <p class="note">Needs the whole original message, so it is limited to the recent
+             cache described above. An unknown id returns <code>404</code>. Honours
+             opt-out on the destination.</p>
+        </div>
+      </details>
+    </section>
+
+    <!-- ---------- not supported ---------- -->
+    <section class="grp" id="unsupported" data-group="Not supported">
+      <h2 class="grp-title">Not supported, and why</h2>
+      <p class="grp-note">
+        Listed so you do not spend an afternoon looking for them. These are limits of
+        what WhatsApp permits an unofficial client to do, not gaps waiting to be filled.
+      </p>
+      <div class="scroll-x">
+        <table>
+          <thead><tr><th>Feature</th><th>Why not</th></tr></thead>
+          <tbody>
+            <tr><td>Buttons, List, Carousel</td><td>WhatsApp stopped honouring interactive templates from unofficial clients. They send without error and arrive as plain text, which is worse than refusing</td></tr>
+            <tr><td>Product, Catalog, Order</td><td>Business-catalog features, available only through the official WhatsApp Business Cloud API</td></tr>
+            <tr><td>Channels, Communities, Stories</td><td>Experimental and unstable in the underlying library; they break on WhatsApp's schedule, not ours</td></tr>
+            <tr><td>Group management</td><td>Genuinely possible — create, add, remove, promote, invite links. Simply not built yet</td></tr>
+            <tr><td>Forwarding an old message</td><td>Needs the original message body. Only the last 500 this process saw are held; a restart clears them</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout bad">
+        <strong>If you need guaranteed interactive messages</strong>
+        Use the official
+        <a href="https://developers.facebook.com/docs/whatsapp/cloud-api">WhatsApp Business Cloud API</a>.
+        This service drives WhatsApp Web, which is the reason it is cheap and also the
+        reason those features are out of reach.
+      </div>
     </section>
 
     <!-- ---------- inbox ---------- -->
@@ -1042,7 +1370,7 @@
       <h4>Delivery</h4>
       <p>
         <code>POST</code> with <code>content-type: application/json</code> and
-        <code>user-agent: wa-http-api/1.0</code>. If <code>WEBHOOK_SECRET</code> is set it
+        <code>user-agent: sandesh/1.0</code>. If <code>WEBHOOK_SECRET</code> is set it
         is sent as <code>x-webhook-secret</code> — compare it before trusting the payload.
       </p>
       <p>
@@ -1061,7 +1389,7 @@
 
       <h4>Payload</h4>
       <div class="code"><pre>{
-  "session": "wa-http-api",
+  "session": "sandesh",
   "id": "3EB0F3C7A1B2C3D4E5",
   "from": "919876543210@s.whatsapp.net",
   "fromNumber": "919876543210",
@@ -1159,7 +1487,40 @@ const SAMPLES = {
     "caption": "Here it is"
   }'`,
   check: `curl ${ORIGIN}/api/check/919876543210 \\
-  -H "x-api-key: wak_YOUR_KEY"`
+  -H "x-api-key: wak_YOUR_KEY"`,
+  location: `curl -X POST ${ORIGIN}/api/send/location \\
+  -H "x-api-key: wak_YOUR_KEY" \\
+  -H "content-type: application/json" \\
+  -d '{
+    "to": "919876543210",
+    "latitude": 19.0760,
+    "longitude": 72.8777,
+    "name": "Our office",
+    "address": "Nariman Point, Mumbai"
+  }'`,
+  contact: `curl -X POST ${ORIGIN}/api/send/contact \\
+  -H "x-api-key: wak_YOUR_KEY" \\
+  -H "content-type: application/json" \\
+  -d '{
+    "to": "919876543210",
+    "contacts": [
+      { "name": "Asha Sharma", "number": "919000000001", "organization": "Acme" },
+      { "name": "Bharat Rao",  "number": "919000000002" }
+    ]
+  }'`,
+  poll: `curl -X POST ${ORIGIN}/api/send/poll \\
+  -H "x-api-key: wak_YOUR_KEY" \\
+  -H "content-type: application/json" \\
+  -d '{
+    "to": "919876543210",
+    "question": "Which slot suits you?",
+    "options": ["Morning", "Afternoon", "Evening"],
+    "selectableCount": 1
+  }'`,
+  react: `curl -X POST ${ORIGIN}/api/messages/3EB0F3C7A1B2C3D4E5/react \\
+  -H "x-api-key: wak_YOUR_KEY" \\
+  -H "content-type: application/json" \\
+  -d '{ "to": "919876543210", "emoji": "👍" }'`
 }
 
 for (const pre of document.querySelectorAll('pre.sample')) {

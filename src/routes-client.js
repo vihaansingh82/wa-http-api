@@ -1,15 +1,24 @@
 import express from 'express'
 import { ApiError } from './errors.js'
 import { normaliseJid, isGroupJid, jidToNumber } from './jid.js'
+import { config } from './config.js'
 import {
   MEDIA_TYPES,
   buildMediaContent,
+  mediaSource,
+  optionalInt,
+  optionalMentions,
   optionalString,
   requireBody,
+  requireContactCards,
+  requireCoordinate,
   requireEnum,
-  requireHttpUrl,
+  requirePoll,
+  requireReaction,
   requireString
 } from './validate.js'
+
+const MAX_MEDIA_BYTES = config.maxMediaMb * 1048576
 
 /**
  * Everything a client can do with their own account. Every handler is scoped to
@@ -132,38 +141,204 @@ export function clientRoutes(tenants, store) {
     return client
   }
 
+  /**
+   * Options every send accepts: who to mention, what to quote, and whether the
+   * message should disappear after one view.
+   */
+  function sendOpts(body) {
+    return {
+      mentions: optionalMentions(body, normaliseJid),
+      viewOnce: body.viewOnce === true || undefined,
+      replyTo: optionalString(body, 'replyTo', { maxLength: 128 }),
+      linkPreview: body.linkPreview === false ? false : undefined
+    }
+  }
+
+  /** Shared tail of every send: record it against the CRM and answer 202. */
+  async function completeSend(req, res, result, { body, type = 'text', extra = {} }) {
+    await tenants.persistOutbound(me(req), {
+      waId: result.id,
+      jid: result.to,
+      body,
+      type
+    })
+    res.status(202).json({ sent: true, type, isGroup: isGroupJid(result.to), ...extra, ...result })
+  }
+
   router.post('/send/text', async (req, res) => {
     const body = requireBody(req.body)
     const to = normaliseJid(body.to)
     const message = requireString(body, 'message', { maxLength: 65536 })
+    const opts = sendOpts(body)
 
     await assertNotOptedOut(me(req), to)
     const client = await connectedClient(req)
-    const result = await client.sendText(to, message)
-    await tenants.persistOutbound(me(req), { waId: result.id, jid: result.to, body: message })
-    res.status(202).json({ sent: true, isGroup: isGroupJid(result.to), ...result })
+    const result = await client.sendText(to, message, opts)
+    await completeSend(req, res, result, { body: message, type: 'text' })
   })
 
   router.post('/send/media', async (req, res) => {
     const body = requireBody(req.body)
     const to = normaliseJid(body.to)
     const type = requireEnum(body, 'type', MEDIA_TYPES)
-    const url = requireHttpUrl(body, 'url')
     const caption = optionalString(body, 'caption', { maxLength: 4096 })
-    const mimetype = optionalString(body, 'mimetype', { maxLength: 255 })
-    const fileName = optionalString(body, 'fileName', { maxLength: 255 })
+    const gif = body.gif === true || body.isGif === true
+    const opts = sendOpts(body)
+
+    // Accepts a URL or base64; the caller's own mimetype/fileName win over
+    // anything inferred from the URL.
+    const media = mediaSource(body, { maxBytes: MAX_MEDIA_BYTES })
+    const mimetype = optionalString(body, 'mimetype', { maxLength: 255 }) ?? media.mimetype ?? undefined
+    const fileName = optionalString(body, 'fileName', { maxLength: 255 }) ?? media.fileName ?? undefined
 
     await assertNotOptedOut(me(req), to)
     const client = await connectedClient(req)
-    const content = buildMediaContent({ type, url, caption, mimetype, fileName })
-    const result = await client.sendMedia(to, content)
-    await tenants.persistOutbound(me(req), {
-      waId: result.id,
-      jid: result.to,
-      body: caption ?? `[${type}]`,
+    const content = buildMediaContent({ type, source: media.source, caption, mimetype, fileName, gif })
+    const result = await client.sendMedia(to, content, opts)
+    await completeSend(req, res, result, {
+      body: caption ?? `[${gif && type === 'video' ? 'gif' : type}]`,
       type
     })
-    res.status(202).json({ sent: true, type, isGroup: isGroupJid(result.to), ...result })
+  })
+
+  router.post('/send/location', async (req, res) => {
+    const body = requireBody(req.body)
+    const to = normaliseJid(body.to)
+    const latitude = requireCoordinate(body, 'latitude', 90)
+    const longitude = requireCoordinate(body, 'longitude', 180)
+    const name = optionalString(body, 'name', { maxLength: 200 })
+    const address = optionalString(body, 'address', { maxLength: 400 })
+
+    await assertNotOptedOut(me(req), to)
+    const client = await connectedClient(req)
+    const result = await client.sendLocation(to, { latitude, longitude, name, address }, sendOpts(body))
+    await completeSend(req, res, result, {
+      body: name ?? `${latitude}, ${longitude}`,
+      type: 'location'
+    })
+  })
+
+  /** One contact card, or several: pass `contacts: [...]` for a list. */
+  router.post('/send/contact', async (req, res) => {
+    const body = requireBody(req.body)
+    const to = normaliseJid(body.to)
+    const contacts = requireContactCards(body, jidToNumber, normaliseJid)
+    const displayName = optionalString(body, 'displayName', { maxLength: 120 })
+
+    await assertNotOptedOut(me(req), to)
+    const client = await connectedClient(req)
+    const result = await client.sendContacts(to, { contacts, displayName }, sendOpts(body))
+    await completeSend(req, res, result, {
+      body: contacts.map(c => c.displayName).join(', '),
+      type: 'contact',
+      extra: { contacts: contacts.length }
+    })
+  })
+
+  router.post('/send/poll', async (req, res) => {
+    const body = requireBody(req.body)
+    const to = normaliseJid(body.to)
+    const poll = requirePoll(body)
+
+    await assertNotOptedOut(me(req), to)
+    const client = await connectedClient(req)
+    const result = await client.sendPoll(to, poll, sendOpts(body))
+    await completeSend(req, res, result, { body: poll.name, type: 'poll' })
+  })
+
+  router.post('/send/sticker', async (req, res) => {
+    const body = requireBody(req.body)
+    const to = normaliseJid(body.to)
+    const media = mediaSource(body, { maxBytes: MAX_MEDIA_BYTES })
+
+    await assertNotOptedOut(me(req), to)
+    const client = await connectedClient(req)
+    const result = await client.sendSticker(to, { source: media.source, animated: body.animated === true }, sendOpts(body))
+    await completeSend(req, res, result, { body: '[sticker]', type: 'sticker' })
+  })
+
+  router.post('/send/audio', async (req, res) => {
+    const body = requireBody(req.body)
+    const to = normaliseJid(body.to)
+    const media = mediaSource(body, { maxBytes: MAX_MEDIA_BYTES })
+    const voiceNote = body.voiceNote === true || body.ptt === true
+    const seconds = optionalInt(body, 'seconds', { min: 1, max: 86400 })
+    const mimetype = optionalString(body, 'mimetype', { maxLength: 255 })
+
+    await assertNotOptedOut(me(req), to)
+    const client = await connectedClient(req)
+    const result = await client.sendAudio(to, { source: media.source, voiceNote, seconds, mimetype }, sendOpts(body))
+    await completeSend(req, res, result, {
+      body: voiceNote ? '[voice note]' : '[audio]',
+      type: 'audio'
+    })
+  })
+
+  // ---- acting on an existing message --------------------------------------
+  /**
+   * These take a WhatsApp message id rather than a database id. Reacting,
+   * deleting and pinning need only the message key, so they work for older
+   * messages as long as `to` says which chat it was in. Replying and forwarding
+   * need the whole message, so they are limited to what this process has seen
+   * recently.
+   */
+  router.post('/messages/:id/react', async (req, res) => {
+    const body = requireBody(req.body)
+    const to = normaliseJid(body.to)
+    const emoji = requireReaction(body)
+
+    const client = await connectedClient(req)
+    const result = await client.react(to, { messageId: req.params.id, emoji, fromMe: body.fromMe === true })
+    res.status(202).json({ reacted: true, emoji, messageId: req.params.id, ...result })
+  })
+
+  router.post('/messages/:id/delete', async (req, res) => {
+    const body = requireBody(req.body)
+    const to = normaliseJid(body.to)
+
+    const client = await connectedClient(req)
+    const result = await client.deleteMessage(to, { messageId: req.params.id, fromMe: body.fromMe !== false })
+    res.status(202).json({ deleted: true, messageId: req.params.id, ...result })
+  })
+
+  router.post('/messages/:id/edit', async (req, res) => {
+    const body = requireBody(req.body)
+    const to = normaliseJid(body.to)
+    const message = requireString(body, 'message', { maxLength: 65536 })
+
+    const client = await connectedClient(req)
+    const result = await client.editMessage(to, { messageId: req.params.id, text: message })
+    res.status(202).json({ edited: true, messageId: req.params.id, ...result })
+  })
+
+  router.post('/messages/:id/pin', async (req, res) => {
+    const body = requireBody(req.body)
+    const to = normaliseJid(body.to)
+    const unpin = body.unpin === true
+    // WhatsApp accepts only these three durations; anything else is ignored.
+    const seconds = optionalInt(body, 'seconds') ?? 604800
+    if (![86400, 604800, 2592000].includes(seconds)) {
+      throw ApiError.badRequest('"seconds" must be 86400 (24h), 604800 (7d) or 2592000 (30d).')
+    }
+
+    const client = await connectedClient(req)
+    const result = await client.pinMessage(to, {
+      messageId: req.params.id,
+      fromMe: body.fromMe === true,
+      unpin,
+      seconds
+    })
+    res.status(202).json({ pinned: !unpin, messageId: req.params.id, ...result })
+  })
+
+  router.post('/messages/:id/forward', async (req, res) => {
+    const body = requireBody(req.body)
+    const to = normaliseJid(body.to)
+
+    await assertNotOptedOut(me(req), to)
+    const client = await connectedClient(req)
+    const result = await client.forwardMessage(to, { messageId: req.params.id })
+    await completeSend(req, res, result, { body: '[forwarded]', type: 'forward' })
   })
 
   router.get('/check/:number', async (req, res) => {

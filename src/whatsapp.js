@@ -5,6 +5,7 @@ import makeWASocket, {
   fetchLatestBaileysVersion,
   jidNormalizedUser,
   makeCacheableSignalKeyStore,
+  proto,
   useMultiFileAuthState
 } from 'baileys'
 import NodeCache from '@cacheable/node-cache'
@@ -20,6 +21,9 @@ import { isGroupJid, jidToNumber } from './jid.js'
 
 /** How many recently sent messages to keep so Baileys can answer retry requests. */
 const SENT_CACHE_LIMIT = 200
+
+/** How many whole messages to keep so they can be quoted or forwarded. */
+const RECENT_CACHE_LIMIT = 500
 
 /** Resolved recipient JIDs, so a repeat send skips the lookup. */
 const RECIPIENT_CACHE_LIMIT = 500
@@ -60,6 +64,16 @@ export function createWhatsAppClient({
   const msgRetryCounterCache = new NodeCache()
   /** @type {Map<string, import('baileys').proto.IMessage>} */
   const sentMessages = new Map()
+  /**
+   * Whole messages, both directions, keyed by WhatsApp's message id.
+   *
+   * Replying and forwarding need the original message, not just its id --
+   * Baileys builds the quote out of its content. Reacting, deleting and pinning
+   * need only the key, which can be rebuilt from a stored row, so those still
+   * work for messages older than this cache.
+   * @type {Map<string, import('baileys').WAMessage>}
+   */
+  const recentMessages = new Map()
   /** @type {Map<string, string>} input JID -> the JID WhatsApp actually uses */
   const recipientCache = new Map()
 
@@ -92,6 +106,46 @@ export function createWhatsAppClient({
     if (sentMessages.size > SENT_CACHE_LIMIT) {
       sentMessages.delete(sentMessages.keys().next().value)
     }
+  }
+
+  /** Keep a whole message around so it can be quoted or forwarded later. */
+  function remember(msg) {
+    const id = msg?.key?.id
+    if (!id || !msg.message) return
+    recentMessages.set(id, msg)
+    if (recentMessages.size > RECENT_CACHE_LIMIT) {
+      recentMessages.delete(recentMessages.keys().next().value)
+    }
+  }
+
+  /**
+   * The key identifying a message, for reacting, deleting or pinning.
+   *
+   * Preferring the cached key matters: it carries `participant`, which a group
+   * message needs and which cannot be reconstructed from a stored row.
+   */
+  function keyFor({ messageId, jid, fromMe = false }) {
+    const cached = recentMessages.get(messageId)
+    if (cached?.key) return cached.key
+    if (!jid) {
+      throw ApiError.badRequest(
+        'That message is not in this server\'s recent cache, so "to" is required to locate it.'
+      )
+    }
+    return { remoteJid: jid, id: messageId, fromMe: Boolean(fromMe) }
+  }
+
+  /** The whole message, required for quoting and forwarding. */
+  function requireRemembered(messageId) {
+    const found = recentMessages.get(messageId)
+    if (!found) {
+      throw ApiError.notFound(
+        `Message ${messageId} is not in this server's recent cache (the last ${RECENT_CACHE_LIMIT} ` +
+          'messages). Replying to and forwarding older messages is not supported.',
+        { messageId }
+      )
+    }
+    return found
   }
 
   /**
@@ -250,6 +304,10 @@ export function createWhatsAppClient({
     if (type !== 'notify') return
 
     for (const msg of messages) {
+      // Cached before the forwarding filter: a reply or a reaction needs the
+      // original message even when it was never worth sending to a webhook.
+      remember(msg)
+
       if (!shouldForward(msg)) continue
 
       const payload = buildWebhookPayload(msg, { sessionName: config.sessionName })
@@ -378,20 +436,48 @@ export function createWhatsAppClient({
     return match.jid
   }
 
-  /** Push a send through the global throttle, then remember it for retries. */
-  async function enqueueSend(input, content, label) {
+  /** Turn caller options into Baileys' send options. */
+  function sendOptions({ replyTo } = {}) {
+    return replyTo ? { quoted: requireRemembered(replyTo) } : {}
+  }
+
+  /**
+   * Push a send through the global throttle, then remember it for retries.
+   *
+   * `resolve: false` skips the onWhatsApp lookup. Operations that act on an
+   * existing message -- react, delete, edit, pin -- already hold the exact JID
+   * of the conversation the message lives in, and re-resolving it could hand
+   * back a different one, which would address the wrong chat.
+   */
+  async function enqueueSend(input, content, label, options = {}, { resolve = true } = {}) {
     const active = requireConnection()
-    const jid = await resolveRecipient(input)
+    const jid = resolve ? await resolveRecipient(input) : input
     return queue.add(async () => {
       // Re-check: the connection may have dropped while this waited in the queue.
       if (!isConnected() || sock !== active) {
         throw ApiError.unavailable('WhatsApp disconnected while this message was queued.')
       }
-      const sent = await sock.sendMessage(jid, content)
+      let sent
+      try {
+        sent = await sock.sendMessage(jid, content, options)
+      } catch (err) {
+        if (err instanceof ApiError) throw err
+        // Baileys fetches a media URL itself, from this server. An unreachable
+        // host surfaces as a bare TypeError, which would otherwise be reported
+        // as an internal error when it is really the caller's URL that is wrong.
+        const detail = [err?.message, err?.cause?.message].filter(Boolean).join(': ')
+        if (/fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|certificate|socket hang up/i.test(detail)) {
+          throw ApiError.gateway(`Could not fetch the media: ${detail}`, {
+            hint: 'The URL has to be publicly reachable from this server. Send base64 instead if it is not.'
+          })
+        }
+        throw err
+      }
       if (!sent) {
         throw ApiError.gateway('WhatsApp did not acknowledge the message.')
       }
       rememberSent(sent.key?.id, sent.message)
+      remember(sent)
       return {
         id: sent.key?.id ?? null,
         to: jid,
@@ -444,8 +530,14 @@ export function createWhatsAppClient({
       return { qr, dataUrl: qrDataUrl, generatedAt: qrGeneratedAt }
     },
 
-    sendText(jid, message) {
-      return enqueueSend(jid, { text: message }, 'text')
+    sendText(jid, message, opts = {}) {
+      const content = { text: message }
+      if (opts.mentions?.length) content.mentions = opts.mentions
+      if (opts.viewOnce) content.viewOnce = true
+      // `null` is Baileys' way of suppressing the preview it would otherwise
+      // generate; omitting the key is not the same thing.
+      if (opts.linkPreview === false) content.linkPreview = null
+      return enqueueSend(jid, content, 'text', sendOptions(opts))
     },
 
     /** Message the linked account itself. Handy for a self-test that bothers nobody. */
@@ -455,8 +547,113 @@ export function createWhatsAppClient({
       return enqueueSend(jidNormalizedUser(me), { text: message }, 'self')
     },
 
-    sendMedia(jid, content) {
-      return enqueueSend(jid, content, 'media')
+    sendMedia(jid, content, opts = {}) {
+      const body = { ...content }
+      if (opts.mentions?.length) body.mentions = opts.mentions
+      if (opts.viewOnce) body.viewOnce = true
+      return enqueueSend(jid, body, 'media', sendOptions(opts))
+    },
+
+    sendLocation(jid, { latitude, longitude, name, address }, opts = {}) {
+      return enqueueSend(
+        jid,
+        {
+          location: {
+            degreesLatitude: latitude,
+            degreesLongitude: longitude,
+            ...(name ? { name } : {}),
+            ...(address ? { address } : {})
+          }
+        },
+        'location',
+        sendOptions(opts)
+      )
+    },
+
+    /** One or more contact cards. WhatsApp shows a single card differently from a list. */
+    sendContacts(jid, { contacts, displayName }, opts = {}) {
+      return enqueueSend(
+        jid,
+        {
+          contacts: {
+            displayName:
+              displayName ??
+              (contacts.length === 1 ? contacts[0].displayName : `${contacts.length} contacts`),
+            contacts
+          }
+        },
+        'contacts',
+        sendOptions(opts)
+      )
+    },
+
+    sendPoll(jid, poll, opts = {}) {
+      return enqueueSend(jid, { poll }, 'poll', sendOptions(opts))
+    },
+
+    sendSticker(jid, { source, animated }, opts = {}) {
+      return enqueueSend(
+        jid,
+        { sticker: source, ...(animated ? { isAnimated: true } : {}) },
+        'sticker',
+        sendOptions(opts)
+      )
+    },
+
+    sendAudio(jid, { source, voiceNote, seconds, mimetype }, opts = {}) {
+      return enqueueSend(
+        jid,
+        {
+          audio: source,
+          ptt: Boolean(voiceNote),
+          // A voice note must be opus or WhatsApp renders it as a file attachment
+          // with no waveform, which is not what the caller asked for.
+          mimetype: mimetype ?? (voiceNote ? 'audio/ogg; codecs=opus' : 'audio/mpeg'),
+          ...(seconds ? { seconds } : {})
+        },
+        'audio',
+        sendOptions(opts)
+      )
+    },
+
+    /** React to a message. An empty emoji removes an existing reaction. */
+    react(jid, { messageId, emoji, fromMe }) {
+      const key = keyFor({ messageId, jid, fromMe })
+      return enqueueSend(jid, { react: { text: emoji, key } }, 'reaction', {}, { resolve: false })
+    },
+
+    /** Delete for everyone. Deleting someone else's message needs group admin. */
+    deleteMessage(jid, { messageId, fromMe }) {
+      const key = keyFor({ messageId, jid, fromMe })
+      return enqueueSend(jid, { delete: key }, 'delete', {}, { resolve: false })
+    },
+
+    /** Edit your own message. WhatsApp only allows this within ~15 minutes. */
+    editMessage(jid, { messageId, text }) {
+      const key = keyFor({ messageId, jid, fromMe: true })
+      if (!key.fromMe) throw ApiError.badRequest('You can only edit your own messages.')
+      return enqueueSend(jid, { text, edit: key }, 'edit', {}, { resolve: false })
+    },
+
+    /** Forward a message this server has seen recently to another chat. */
+    forwardMessage(jid, { messageId }) {
+      return enqueueSend(jid, { forward: requireRemembered(messageId) }, 'forward')
+    },
+
+    /** Pin or unpin a message in the chat, for 24h, 7d or 30d. */
+    pinMessage(jid, { messageId, fromMe, unpin = false, seconds = 604800 }) {
+      const key = keyFor({ messageId, jid, fromMe })
+      return enqueueSend(
+        jid,
+        {
+          pin: key,
+          type: unpin ? proto.PinInChat.Type.UNPIN_FOR_ALL : proto.PinInChat.Type.PIN_FOR_ALL,
+          time: seconds
+        },
+        unpin ? 'unpin' : 'pin',
+        {},
+        { resolve: false }
+      )
     },
 
     async checkNumber(number) {

@@ -67,14 +67,14 @@ Cheapest way to get a real volume plus an always-on machine.
 
 ```bash
 fly auth login
-fly launch --no-deploy --copy-config --name my-wa-api
-fly volumes create wa_data --size 1 --region sin
+fly launch --no-deploy --copy-config --name sandesh-api
+fly volumes create sandesh_data --size 1 --region sin
 
 fly secrets set \
   SUPABASE_URL=https://YOUR-PROJECT.supabase.co \
   SUPABASE_PUBLISHABLE_KEY=sb_publishable_... \
   SUPABASE_SERVICE_ROLE_KEY=... \
-  PUBLIC_URL=https://my-wa-api.fly.dev
+  PUBLIC_URL=https://sandesh-api.fly.dev
 
 fly deploy
 fly logs
@@ -83,7 +83,8 @@ fly logs
 [fly.toml](fly.toml) pins what matters: the volume at `/data`,
 `AUTH_DIR=/data/auth`, `auto_stop_machines = false`, `min_machines_running = 1`,
 and a `/health` check. Edit `app` and `primary_region` before the first deploy —
-`app = "wa-http-api"` is a placeholder and app names are globally unique.
+`app` must be globally unique across all of Fly, so `sandesh-api` may already be
+taken — `fly apps create sandesh-api` tells you, and any suffix works.
 
 A freshly created Fly volume is owned by `root`, so a container starting
 straight as an unprivileged user cannot write to it and every session dies with
@@ -160,6 +161,7 @@ Four are required:
 | `AUTH_DIR` | Must be on the persistent disk. Already set in both configs |
 | `MAX_TENANT_SESSIONS` | Cap on simultaneous sockets. Your real capacity limit |
 | `SEND_DELAY_MS` | Per-tenant gap between sends, default 3000 |
+| `MAX_MEDIA_MB` | Largest base64 media in a body, default 16 |
 | `WEBHOOK_URL` / `WEBHOOK_SECRET` | Optional inbound forwarding |
 | `LOG_PRETTY` | Leave `false` so logs stay JSON |
 
@@ -184,10 +186,10 @@ Losing the disk means **every client** re-scans. Each tenant has a folder under
 
 ```bash
 # Fly
-fly ssh console -C "tar czf - -C /data auth" > wa-auth-backup.tar.gz
+fly ssh console -C "tar czf - -C /data auth" > sandesh-auth-backup.tar.gz
 
 # Docker
-docker compose exec wa-http-api tar czf - -C /app auth > wa-auth-backup.tar.gz
+docker compose exec sandesh tar czf - -C /app auth > sandesh-auth-backup.tar.gz
 ```
 
 Treat that tarball like a password store: anyone holding it can send messages as
